@@ -10,7 +10,6 @@ export async function captureScreenshot(elementsToHide = []) {
   try {
     const canvas = await html2canvas(document.body, {
       useCORS: true,
-      allowTaint: true,
       scale: 0.8,
       backgroundColor: '#ffffff',
       removeContainer: true,

@@ -28,7 +28,7 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const origin = request.headers.get('Origin') ?? ''
     const corsHeaders = {
-      'Access-Control-Allow-Origin': env.ALLOWED_ORIGIN === '*' ? '*' : (origin || '*'),
+      'Access-Control-Allow-Origin': env.ALLOWED_ORIGIN === '*' ? '*' : env.ALLOWED_ORIGIN,
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
     }
@@ -68,16 +68,19 @@ async function handleFeedback(
     return jsonError('Worker misconfigured: GITHUB_REPO must be "owner/repo"', 500, corsHeaders)
   }
 
-  // Upload screenshot to R2 if provided
+  // Upload screenshot to R2 if provided (cap at ~3 MB base64)
   let screenshotUrl: string | null = null
   if (body.screenshot) {
+    if (body.screenshot.length > 4_000_000) {
+      return jsonError('Screenshot exceeds maximum size', 413, corsHeaders)
+    }
     screenshotUrl = await uploadScreenshot(body.screenshot, env)
   }
 
-  // Build the GitHub issue
+  // Build the GitHub issue — ignore any labels sent by the client
   const issueTitle = buildTitle(body)
   const issueBody = buildIssueBody(body, screenshotUrl)
-  const labels = ['user-feedback', ...(body.labels ?? [])]
+  const labels = ['user-feedback']
 
   const issueRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/issues`, {
     method: 'POST',
@@ -109,7 +112,7 @@ async function uploadScreenshot(dataUrl: string, env: Env): Promise<string | nul
   try {
     const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, '')
     const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
-    const key = `screenshots/${Date.now()}-${Math.random().toString(36).slice(2)}.png`
+    const key = `screenshots/${crypto.randomUUID()}.png`
     await env.SCREENSHOTS.put(key, bytes, { httpMetadata: { contentType: 'image/png' } })
     // Public bucket URL — consumers must enable R2 public access for their bucket
     return `https://pub-REPLACE_WITH_YOUR_R2_ACCOUNT_ID.r2.dev/${key}`

@@ -77,7 +77,6 @@ export class BugPilotWidget {
   }
 
   _dialogHTML() {
-    const ctx = captureContext()
     return `
       <div class="bp-header">
         <h2 id="bp-dialog-title">Report a bug</h2>
@@ -160,9 +159,8 @@ export class BugPilotWidget {
 
     this._submitBtn.addEventListener('click', () => this._submit())
 
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && this._isOpen) this.close()
-    })
+    this._onKeydown = (e) => { if (e.key === 'Escape' && this._isOpen) this.close() }
+    document.addEventListener('keydown', this._onKeydown)
   }
 
   _updateSubmit() {
@@ -201,11 +199,11 @@ export class BugPilotWidget {
       }
 
       const { issueUrl } = await res.json()
-      this._showStatus('success', `Report submitted. ${issueUrl ? `<a href="${issueUrl}" target="_blank" rel="noopener">View issue →</a>` : ''}`)
+      this._showStatus('success', issueUrl && /^https:\/\/github\.com\//.test(issueUrl) ? issueUrl : null)
       this._reset()
       setTimeout(() => this.close(), 3000)
     } catch (err) {
-      this._showStatus('error', `Failed to submit: ${err.message}`)
+      this._showError(`Failed to submit: ${err.message}`)
       console.error('[bugpilot] submit failed', err)
     } finally {
       this._submitting = false
@@ -214,9 +212,24 @@ export class BugPilotWidget {
     }
   }
 
-  _showStatus(type, html) {
+  _showStatus(type, issueUrl) {
     this._statusEl.className = `bp-status bp-status--${type} bp-visible`
-    this._statusEl.innerHTML = html
+    this._statusEl.textContent = ''
+    const msg = document.createTextNode('Report submitted. ')
+    this._statusEl.appendChild(msg)
+    if (issueUrl) {
+      const a = document.createElement('a')
+      a.href = issueUrl
+      a.textContent = 'View issue →'
+      a.target = '_blank'
+      a.rel = 'noopener noreferrer'
+      this._statusEl.appendChild(a)
+    }
+  }
+
+  _showError(message) {
+    this._statusEl.className = 'bp-status bp-status--error bp-visible'
+    this._statusEl.textContent = message
   }
 
   _reset() {
@@ -241,5 +254,13 @@ export class BugPilotWidget {
     this._dialog.classList.remove('bp-visible')
     this._backdrop.classList.remove('bp-visible')
     this._statusEl.className = 'bp-status'
+  }
+
+  destroy() {
+    document.removeEventListener('keydown', this._onKeydown)
+    this._trigger?.remove()
+    this._dialog?.remove()
+    this._backdrop?.remove()
+    document.getElementById('bp-styles')?.remove()
   }
 }

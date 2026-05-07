@@ -24,7 +24,7 @@ const BugPilot = {
   },
 
   destroy() {
-    // TODO: remove DOM nodes and event listeners for clean teardown
+    _instance?.destroy()
     _instance = null
   },
 }

@@ -18,11 +18,31 @@ Drop-in feedback and bug-capture widget with structured issue creation, AI triag
 
 ## Status
 
-Early planning. See [PLANNING.md](./PLANNING.md) for architecture and roadmap.
+M1 in progress. Widget and Cloudflare Worker are scaffolded; not yet wired to a live R2 bucket or deployed. See [PLANNING.md](./PLANNING.md) for the full roadmap.
 
-## Reference implementation
+## Getting started (development)
 
-A capture-only version (no Claude automation) exists in the `business-review-360` app. That is the starting point for the widget and structured issue body format.
+**Widget:**
+```bash
+cd widget && npm install
+npm run dev        # opens test harness at localhost:5173
+npm run build      # produces dist/bugpilot.es.js, .umd.js, .iife.js
+```
+
+**Cloudflare Worker:**
+```bash
+cd backend && npm install
+# Set secrets before running:
+wrangler secret put GITHUB_TOKEN   # fine-grained PAT: Issues write + Contents write
+wrangler secret put GITHUB_REPO    # "owner/repo"
+npx wrangler dev                   # local dev server on localhost:8787
+npx wrangler deploy
+```
+
+**R2 setup (required for screenshots):**
+1. Create a bucket named `bugpilot-screenshots` in your Cloudflare dashboard.
+2. Enable public access on the bucket to get a `pub-<id>.r2.dev` URL.
+3. Replace the placeholder in `backend/src/index.ts` (`uploadScreenshot`) with your actual `pub-<id>.r2.dev` domain.
 
 ## Licence
 

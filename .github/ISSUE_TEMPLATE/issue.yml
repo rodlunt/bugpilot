@@ -1,0 +1,56 @@
+name: Issue
+description: Standard issue template (bug, feature, chore, ops, security, docs, discussion)
+title: "<type>(scope): "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Pick a type and milestone before submitting. Title format is `<type>(scope): description`. Do NOT prefix with `Phase N:` (the milestone field is the source of truth).
+  - type: dropdown
+    id: type
+    attributes:
+      label: Type
+      description: What kind of issue is this?
+      options:
+        - bug
+        - enhancement
+        - chore
+        - ops
+        - security
+        - documentation
+        - discussion
+    validations:
+      required: true
+  - type: dropdown
+    id: milestone_hint
+    attributes:
+      label: Milestone hint
+      description: Suggested milestone. Set the actual milestone field after submitting.
+      options:
+        - Phase 2 (active backlog)
+        - Phase 3 (long-term)
+        - Phase 4 (nice to have)
+        - Deferred (use the deferred label, no milestone)
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What is the situation? Why does this matter?
+      placeholder: One or two paragraphs of context.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: What does done look like? Be concrete.
+      placeholder: A bulleted checklist is fine.
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes (optional)
+      description: Links, related issues, prior discussion, constraints.

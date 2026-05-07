@@ -1,0 +1,30 @@
+# Ignore vscode AI rules
+.github/instructions/codacy.instructions.md
+
+# Node / widget
+node_modules/
+dist/
+build/
+*.tgz
+.npmrc
+npm-debug.log*
+yarn-error.log*
+.yarn/cache
+.pnp.*
+
+# Python / backend
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea/
+*.swp
+*.swo

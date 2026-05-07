@@ -1,0 +1,52 @@
+{
+  "githubIssues.queries": [
+    {
+      "label": "My Issues",
+      "query": "repo:rodlunt/bugpilot is:open is:issue assignee:${user}"
+    },
+    {
+      "label": "All Open",
+      "query": "repo:rodlunt/bugpilot is:open is:issue sort:updated-desc"
+    },
+    {
+      "label": "Phase 2 (milestone)",
+      "query": "repo:rodlunt/bugpilot is:open is:issue milestone:\"Phase 2\" sort:updated-desc"
+    },
+    {
+      "label": "Phase 3 (milestone)",
+      "query": "repo:rodlunt/bugpilot is:open is:issue milestone:\"Phase 3\" sort:updated-desc"
+    },
+    {
+      "label": "Phase 4 (milestone)",
+      "query": "repo:rodlunt/bugpilot is:open is:issue milestone:\"Phase 4\" sort:updated-desc"
+    },
+    {
+      "label": "Deferred",
+      "query": "repo:rodlunt/bugpilot is:open is:issue label:deferred sort:updated-desc"
+    },
+    {
+      "label": "Untriaged (no milestone)",
+      "query": "repo:rodlunt/bugpilot is:open is:issue no:milestone -label:deferred sort:updated-desc"
+    },
+    {
+      "label": "Bugs",
+      "query": "repo:rodlunt/bugpilot is:open is:issue label:bug sort:updated-desc"
+    },
+    {
+      "label": "Enhancements",
+      "query": "repo:rodlunt/bugpilot is:open is:issue label:enhancement -label:deferred sort:updated-desc"
+    },
+    {
+      "label": "Discussion",
+      "query": "repo:rodlunt/bugpilot is:open is:issue label:discussion sort:updated-desc"
+    },
+    {
+      "label": "SEO",
+      "query": "repo:rodlunt/bugpilot is:open is:issue label:seo sort:updated-desc"
+    },
+    {
+      "label": "Content",
+      "query": "repo:rodlunt/bugpilot is:open is:issue label:content sort:updated-desc"
+    }
+  ]
+}

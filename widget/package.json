@@ -1,0 +1,28 @@
+{
+  "name": "bugpilot-widget",
+  "version": "0.1.0",
+  "description": "Drop-in feedback and bug-capture widget with AI-powered triage",
+  "type": "module",
+  "main": "./dist/bugpilot.umd.js",
+  "module": "./dist/bugpilot.es.js",
+  "exports": {
+    ".": {
+      "import": "./dist/bugpilot.es.js",
+      "require": "./dist/bugpilot.umd.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "html2canvas": "^1.4.1"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  },
+  "keywords": ["bug-report", "feedback-widget", "github-issues"],
+  "license": "MIT"
+}

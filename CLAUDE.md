@@ -6,68 +6,87 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 bugpilot is a drop-in feedback and bug-capture product. A user submits a bug report via an embedded widget; a structured GitHub issue is created; a Claude GitHub Action triages it and sends an NTFY phone notification with action buttons (apply fix, dismiss, defer). The "Apply fix" button triggers a second Action that opens a PR.
 
-## Project status
-
-Early build phase. The folder structure is scaffolded; no code exists yet. See PLANNING.md for full architecture and milestones (M1–M4).
-
 ## Repository layout
 
 ```
-widget/          JS package — the embeddable widget (npm + CDN script tag)
+widget/          Vanilla JS package — the embeddable widget (npm + CDN IIFE script tag)
 actions/triage/  GitHub Action — Claude triage on issues.opened
 actions/apply-fix/  GitHub Action — creates fix branch + PR via workflow_dispatch
-backend/         Backend relay — receives widget POST, creates GitHub issue
+backend/         Cloudflare Worker — receives widget POST, uploads screenshot to R2, creates GitHub issue
+test/            Minimal plain-HTML test harness for local widget development
 ```
 
 ## Architecture: how the pieces connect
 
-1. **Widget** POSTs a structured payload (user description + auto-captured context + optional html2canvas screenshot) to the backend endpoint.
-2. **Backend** (MVP: a Flask route; later: Cloudflare Worker) creates a GitHub issue with a structured body. The issue body has a human-readable markdown table AND a machine-readable `<!-- bugpilot:structured {...} bugpilot:end -->` JSON block.
-3. **Triage Action** fires on `issues.opened` with the configured label. It parses the JSON block, calls Claude API, and expects structured JSON back (classification, severity, proposed_fix, response_draft). It posts a comment, applies triage labels, and sends an NTFY notification.
-4. **Apply-fix Action** is triggered by the NTFY "Apply fix" webhook via `workflow_dispatch`. It asks Claude to implement the proposed fix as a code change, opens a PR, and sends a follow-up NTFY.
+1. **Widget** POSTs a structured payload (user description + auto-captured context + optional html2canvas screenshot as base64) to the configured `endpoint`.
+2. **Cloudflare Worker** (`backend/`) receives the POST, uploads the screenshot PNG to a bound R2 bucket (public `r2.dev` URL), then creates a GitHub issue with a structured body. GitHub token lives in Worker env vars, never exposed client-side.
+3. **Triage Action** fires on `issues.opened` with the configured label. It parses the machine-readable JSON block in the issue body, calls Claude API, and expects structured JSON back (classification, severity, proposed_fix, response_draft). Posts a comment, applies triage labels, sends NTFY.
+4. **Apply-fix Action** is triggered by the NTFY "Apply fix" webhook via `workflow_dispatch`. Asks Claude to implement the fix, opens a PR, sends a follow-up NTFY.
+
+## Key constraints — do not violate
+
+- **Widget must be vanilla JS.** No React, no Vue, no framework dependencies. It needs to drop into any host app with a single script tag.
+- **No auth on the widget endpoint.** The Worker accepts anonymous POSTs. The GitHub token is a Worker env var, never in the widget config.
+- **Screenshots go to R2, not inline.** GitHub strips `data:` URIs. `raw.githubusercontent.com` fails for private repos. R2 public bucket URL is the only approach that works universally.
 
 ## Structured issue body format
 
-The JSON block inside the HTML comment is what the Claude Action parses — keep this contract stable across the widget and Actions:
+The JSON block inside the HTML comment is what the Claude Action parses — keep this contract stable:
 
 ```markdown
+## User report
+{description}
+
+## Context
+| Field | Value |
+|---|---|
+| URL | {url} |
+| Viewport | {width}x{height} |
+| Browser | {browser} |
+| OS | {os} |
+| Timestamp | {iso_timestamp} |
+| Project | {projectName} |
+
+## Screenshot
+![Screenshot]({r2_url})
+
 <!-- bugpilot:structured
-{"url":"...","viewport":{"w":...,"h":...},"userAgent":"...","timestamp":"...","projectName":"..."}
+{"url":"...","viewport":{"w":...,"h":...},"userAgent":"...","timestamp":"...","projectName":"...","screenshotUrl":"..."}
 bugpilot:end -->
 ```
 
 ## Widget theming
 
-CSS custom properties only — no Shadow DOM. Host app overrides `--bp-primary`, `--bp-surface`, `--bp-text`, etc. Scoped class names (`.bp-*`) to avoid collisions.
+CSS custom properties only — no Shadow DOM. Scoped `.bp-*` class names. Host app overrides `--bp-primary`, `--bp-surface`, `--bp-text`, `--bp-radius`, `--bp-z-index` etc.
 
 ## Widget configuration
 
 ```js
 BugPilot.init({
-  endpoint: 'https://your-backend/feedback',
-  repo: 'owner/repo',
-  ntfyTopic: 'my-site-bugs',
+  endpoint: 'https://your-worker.workers.dev/feedback',
   projectName: 'My Site',
-  labels: ['bug', 'user-feedback'],
+  labels: ['bug', 'user-feedback'],  // applied to created GitHub issue
+  position: 'bottom-right',          // trigger button position
 })
 ```
 
-## Open decisions (check before assuming)
-
-- **Backend for MVP:** Flask route in content-engine vs. standalone Cloudflare Worker. Planning doc recommends Flask first, extract later. Confirm with Rodney before building either.
-- **Screenshot:** html2canvas, with known cross-origin image limitations accepted for MVP.
-- **Webhook for Apply fix:** GitHub Actions `workflow_dispatch`. Needs a PAT with `workflow` scope or a GitHub App.
-
-## Reference implementation
-
-A capture-only version (form + context, no screenshot, no Claude) exists in the `business-review-360` app. Extract the feedback form component and issue body formatter from there before writing anything from scratch — do not duplicate work that already exists.
-
 ## Commands
 
-No build system is scaffolded yet. Once set up, expect:
+**Widget** (`widget/`):
+```bash
+npm install
+npm run dev     # Vite dev server with test harness
+npm run build   # produces dist/bugpilot.es.js (ESM) and dist/bugpilot.iife.js (CDN script tag)
+```
 
-- `widget/` — Vite or esbuild; `npm run build` produces a single JS bundle for both npm and CDN use.
-- `actions/` — Node.js scripts; no compilation step planned.
-- `backend/` — Flask; run via the host app's existing dev server.
+**Worker** (`backend/`):
+```bash
+npm install
+npx wrangler dev   # local dev with R2 binding simulation
+npx wrangler deploy
+```
 
-Update this file when the build system is chosen.
+## Open decisions
+
+- **NTFY:** not set up yet. Sort when building M2 (triage Action).
+- **npm publish:** M5. For now the package is local/CDN only.

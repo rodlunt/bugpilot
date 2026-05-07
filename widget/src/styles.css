@@ -1,0 +1,306 @@
+/* bugpilot widget — CSS custom property theming layer.
+   Host app overrides any --bp-* variable it cares about. */
+
+:root {
+  --bp-primary: #6366f1;
+  --bp-primary-hover: #4f46e5;
+  --bp-surface: #ffffff;
+  --bp-surface-raised: #f8fafc;
+  --bp-border: #e2e8f0;
+  --bp-text: #0f172a;
+  --bp-text-muted: #64748b;
+  --bp-error: #ef4444;
+  --bp-success: #22c55e;
+  --bp-radius: 12px;
+  --bp-radius-sm: 6px;
+  --bp-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+  --bp-z-index: 2147483647;
+  --bp-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Trigger button */
+.bp-trigger {
+  position: fixed;
+  z-index: var(--bp-z-index);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--bp-primary);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  font-family: var(--bp-font);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
+  transition: background 0.15s, transform 0.1s;
+  user-select: none;
+}
+
+.bp-trigger:hover {
+  background: var(--bp-primary-hover);
+}
+
+.bp-trigger:active {
+  transform: scale(0.97);
+}
+
+.bp-trigger--bottom-right { bottom: 24px; right: 24px; }
+.bp-trigger--bottom-left  { bottom: 24px; left: 24px; }
+.bp-trigger--top-right    { top: 24px; right: 24px; }
+.bp-trigger--top-left     { top: 24px; left: 24px; }
+
+.bp-trigger svg {
+  flex-shrink: 0;
+}
+
+/* Overlay backdrop */
+.bp-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: var(--bp-z-index);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.bp-backdrop.bp-visible {
+  opacity: 1;
+}
+
+/* Dialog panel */
+.bp-dialog {
+  position: fixed;
+  z-index: var(--bp-z-index);
+  bottom: 84px;
+  right: 24px;
+  width: 380px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 120px);
+  background: var(--bp-surface);
+  border-radius: var(--bp-radius);
+  box-shadow: var(--bp-shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(8px) scale(0.98);
+  transition: opacity 0.2s, transform 0.2s;
+  pointer-events: none;
+}
+
+.bp-dialog.bp-visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: all;
+}
+
+.bp-dialog--bottom-left  { right: auto; left: 24px; }
+.bp-dialog--top-right    { bottom: auto; top: 84px; }
+.bp-dialog--top-left     { bottom: auto; top: 84px; right: auto; left: 24px; }
+
+/* Dialog header */
+.bp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--bp-border);
+  flex-shrink: 0;
+}
+
+.bp-header h2 {
+  margin: 0;
+  font-family: var(--bp-font);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--bp-text);
+}
+
+.bp-close {
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--bp-text-muted);
+  border-radius: var(--bp-radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.1s;
+}
+
+.bp-close:hover {
+  background: var(--bp-surface-raised);
+}
+
+/* Scrollable form body */
+.bp-body {
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: 1;
+}
+
+/* Form fields */
+.bp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bp-label {
+  font-family: var(--bp-font);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--bp-text);
+}
+
+.bp-label span {
+  color: var(--bp-text-muted);
+  font-weight: 400;
+}
+
+.bp-select,
+.bp-textarea {
+  font-family: var(--bp-font);
+  font-size: 14px;
+  color: var(--bp-text);
+  background: var(--bp-surface);
+  border: 1px solid var(--bp-border);
+  border-radius: var(--bp-radius-sm);
+  padding: 8px 12px;
+  outline: none;
+  transition: border-color 0.15s;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.bp-select:focus,
+.bp-textarea:focus {
+  border-color: var(--bp-primary);
+}
+
+.bp-textarea {
+  resize: vertical;
+  min-height: 90px;
+}
+
+/* Context chips */
+.bp-context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.bp-chip {
+  font-family: var(--bp-font);
+  font-size: 11px;
+  color: var(--bp-text-muted);
+  background: var(--bp-surface-raised);
+  border: 1px solid var(--bp-border);
+  border-radius: 4px;
+  padding: 2px 8px;
+}
+
+/* Screenshot section */
+.bp-screenshot-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bp-btn-ghost {
+  font-family: var(--bp-font);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--bp-primary);
+  background: none;
+  border: 1px solid var(--bp-primary);
+  border-radius: var(--bp-radius-sm);
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+.bp-btn-ghost:hover {
+  background: rgba(99, 102, 241, 0.06);
+}
+
+.bp-btn-ghost:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.bp-screenshot-preview {
+  max-height: 120px;
+  max-width: 100%;
+  border-radius: var(--bp-radius-sm);
+  border: 1px solid var(--bp-border);
+  display: none;
+  margin-top: 8px;
+}
+
+.bp-screenshot-preview.bp-visible {
+  display: block;
+}
+
+/* Footer */
+.bp-footer {
+  padding: 14px 20px;
+  border-top: 1px solid var(--bp-border);
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+.bp-btn-primary {
+  font-family: var(--bp-font);
+  font-size: 14px;
+  font-weight: 500;
+  color: #fff;
+  background: var(--bp-primary);
+  border: none;
+  border-radius: var(--bp-radius-sm);
+  padding: 8px 18px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.bp-btn-primary:hover {
+  background: var(--bp-primary-hover);
+}
+
+.bp-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Status messages */
+.bp-status {
+  font-family: var(--bp-font);
+  font-size: 13px;
+  padding: 8px 12px;
+  border-radius: var(--bp-radius-sm);
+  display: none;
+}
+
+.bp-status.bp-visible {
+  display: block;
+}
+
+.bp-status--error {
+  color: var(--bp-error);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.bp-status--success {
+  color: var(--bp-success);
+  background: rgba(34, 197, 94, 0.08);
+}

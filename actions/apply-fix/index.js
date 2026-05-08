@@ -81,16 +81,12 @@ async function run() {
 
   execFileSync('git', ['checkout', '-b', branchName])
 
-  // Remove any garbage files created by malformed tool calls (bad path characters)
-  execSync('git checkout -- . 2>/dev/null || true', { stdio: 'pipe' })
-  execSync('git clean -fd 2>/dev/null || true', { stdio: 'pipe' })
-
-  // Re-apply only the files Claude legitimately wrote
+  // Stage only the files Claude explicitly wrote via write_file
   for (const filePath of legitimateWrites) {
     try {
       execFileSync('git', ['add', filePath])
     } catch {
-      core.warning(`Could not stage ${filePath}`)
+      core.warning(`Could not stage ${filePath} — skipping`)
     }
   }
 

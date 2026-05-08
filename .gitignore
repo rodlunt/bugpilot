@@ -7,8 +7,7 @@
 
 # Node / widget
 node_modules/
-# Action dist is intentionally committed — do not add dist/ here
-dist/
+widget/dist/
 build/
 *.tgz
 .npmrc

@@ -3,13 +3,8 @@ main = "src/index.ts"
 compatibility_date = "2024-12-18"
 compatibility_flags = ["nodejs_compat"]
 
-[[r2_buckets]]
-binding = "SCREENSHOTS"
-bucket_name = "bugpilot-screenshots"
-preview_bucket_name = "bugpilot-screenshots-preview"
-
 # Required secrets (set via: wrangler secret put GITHUB_TOKEN)
-# GITHUB_TOKEN   — fine-grained PAT with Issues: write and Contents: write on the target repo
+# GITHUB_TOKEN   — classic PAT with repo scope (issues + contents write)
 # GITHUB_REPO    — "owner/repo"
 
 [vars]

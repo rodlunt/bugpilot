@@ -1,5 +1,4 @@
 export interface Env {
-  SCREENSHOTS: R2Bucket
   GITHUB_TOKEN: string
   GITHUB_REPO: string
   ALLOWED_ORIGIN: string
@@ -115,17 +114,60 @@ async function handleFeedback(
   )
 }
 
+const SCREENSHOTS_BRANCH = 'bug-report-screenshots'
+
 async function uploadScreenshot(dataUrl: string, env: Env): Promise<string | null> {
   try {
+    const [owner, repo] = env.GITHUB_REPO.split('/')
     const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, '')
-    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
-    const key = `screenshots/${crypto.randomUUID()}.png`
-    await env.SCREENSHOTS.put(key, bytes, { httpMetadata: { contentType: 'image/png' } })
-    return `https://pub-REPLACE_WITH_YOUR_R2_ACCOUNT_ID.r2.dev/${key}`
+    const filename = `screenshots/${crypto.randomUUID()}.png`
+    const headers = {
+      Authorization: `Bearer ${env.GITHUB_TOKEN}`,
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent': 'bugpilot-worker/0.1',
+      'Content-Type': 'application/json',
+    }
+
+    await ensureScreenshotsBranch(owner, repo, headers)
+
+    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${filename}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({
+        message: `chore: add screenshot`,
+        content: base64,
+        branch: SCREENSHOTS_BRANCH,
+      }),
+    })
+
+    if (!res.ok) {
+      console.error('[bugpilot] screenshot commit failed', res.status, await res.text())
+      return null
+    }
+
+    return `https://github.com/${owner}/${repo}/raw/${SCREENSHOTS_BRANCH}/${filename}`
   } catch (err) {
-    console.error('[bugpilot] R2 screenshot upload failed', err)
+    console.error('[bugpilot] screenshot upload failed', err)
     return null
   }
+}
+
+async function ensureScreenshotsBranch(owner: string, repo: string, headers: Record<string, string>): Promise<void> {
+  const check = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${SCREENSHOTS_BRANCH}`, { headers })
+  if (check.ok) return
+
+  const repoRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers })
+  const repoData = await repoRes.json() as { default_branch: string }
+
+  const shaRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${repoData.default_branch}`, { headers })
+  const shaData = await shaRes.json() as { object: { sha: string } }
+
+  await fetch(`https://api.github.com/repos/${owner}/${repo}/git/refs`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ ref: `refs/heads/${SCREENSHOTS_BRANCH}`, sha: shaData.object.sha }),
+  })
 }
 
 function buildTitle(body: SubmissionPayload): string {

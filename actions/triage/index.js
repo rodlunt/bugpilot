@@ -207,11 +207,10 @@ function deriveLabels(triage) {
 }
 
 async function sendNtfyFeature({ ntfyTopic, issue, issueUrl }) {
-  const title = `Feature request: ${issue.title.replace(/^\[.*?\]\s*Feature:\s*/, '').slice(0, 80)}`
   const payload = {
     topic: ntfyTopic.replace(/^https?:\/\/ntfy\.sh\//, ''),
-    title,
-    message: 'New feature request logged.',
+    title: 'Feature request submitted',
+    message: issue.title.replace(/^\[.*?\]\s*Feature:\s*/, '').slice(0, 120),
     actions: [
       { action: 'view', label: 'View request', url: issueUrl },
     ],
@@ -231,14 +230,9 @@ async function sendNtfyFeature({ ntfyTopic, issue, issueUrl }) {
 async function sendNtfy({ ntfyTopic, webhookSecret, issue, issueUrl, triage, owner, repo }) {
   const workerBase = process.env.BUGPILOT_WORKER_URL
 
-  const typeLabel = triage.classification === 'feature' ? 'Feature' : 'Bug'
-  const severityPart = triage.severity ? ` · ${triage.severity}` : ''
-  const title = `${typeLabel}${severityPart}: ${issue.title.replace(/^\[.*?\]\s*(?:Bug|Feature):\s*/, '').slice(0, 80)}`
-
-  const messageParts = []
-  if (triage.proposed_fix) messageParts.push(`Fix: ${triage.proposed_fix}`)
-  if (triage.response_draft) messageParts.push(`Response: ${triage.response_draft}`)
-  const message = messageParts.join('\n\n') || 'Triage complete.'
+  const severityPart = triage.severity ? ` [${triage.severity}]` : ''
+  const title = `Bug${severityPart}: ${issue.title.replace(/^\[.*?\]\s*Bug:\s*/, '').slice(0, 80)}`
+  const message = triage.proposed_fix || 'Triage complete — no fix proposed.'
 
   const actions = []
 

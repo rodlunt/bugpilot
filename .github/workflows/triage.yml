@@ -7,7 +7,7 @@ on:
 jobs:
   triage:
     runs-on: ubuntu-latest
-    if: contains(github.event.issue.labels.*.name, 'user-feedback')
+    if: contains(github.event.issue.labels.*.name, 'user-feedback') && contains(github.event.issue.body, '<!-- bugpilot:structured')
     permissions:
       contents: read
       issues: write

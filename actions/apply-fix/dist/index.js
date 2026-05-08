@@ -42800,7 +42800,7 @@ const github = __nccwpck_require__(3228)
 const Anthropic = __nccwpck_require__(121)
 const fs = __nccwpck_require__(9896)
 const path = __nccwpck_require__(6928)
-const { execSync } = __nccwpck_require__(5317)
+const { execSync, execFileSync } = __nccwpck_require__(5317)
 
 const REPO_ROOT = process.cwd()
 const MAX_ITERATIONS = 20
@@ -42847,7 +42847,8 @@ async function run() {
 
   core.info('Running Claude agentic loop for fix implementation...')
   const client = new Anthropic.default({ apiKey })
-  const result = await runAgenticLoop(client, model, prompt)
+  const legitimateWrites = new Set()
+  const result = await runAgenticLoop(client, model, prompt, legitimateWrites)
 
   if (!result) {
     core.setFailed('Claude did not produce a fix result')
@@ -42856,28 +42857,39 @@ async function run() {
 
   core.info(`Fix summary: ${result.summary}`)
 
-  execSync('git config user.name "github-actions[bot]"')
-  execSync('git config user.email "41898282+github-actions[bot]@users.noreply.github.com"')
+  execFileSync('git', ['config', 'user.name', 'github-actions[bot]'])
+  execFileSync('git', ['config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com'])
 
   // Authenticate git push via token
-  execSync(
-    `git remote set-url origin https://x-access-token:${token}@github.com/${owner}/${repo}.git`,
-    { stdio: 'pipe' },
-  )
+  execFileSync('git', [
+    'remote', 'set-url', 'origin',
+    `https://x-access-token:${token}@github.com/${owner}/${repo}.git`,
+  ])
 
   const branchName = `fix/issue-${issueNumber}`
 
   // Clean up any existing remote branch from a previous attempt
   try {
-    execSync(`git push origin --delete ${branchName}`, { stdio: 'pipe' })
+    execFileSync('git', ['push', 'origin', '--delete', branchName], { stdio: 'pipe' })
     core.info(`Deleted existing remote branch ${branchName}`)
   } catch {
     // Branch didn't exist — that's fine
   }
 
-  execSync(`git checkout -b ${branchName}`)
+  execFileSync('git', ['checkout', '-b', branchName])
 
-  execSync('git add -A')
+  // Remove any garbage files created by malformed tool calls (bad path characters)
+  execSync('git checkout -- . 2>/dev/null || true', { stdio: 'pipe' })
+  execSync('git clean -fd 2>/dev/null || true', { stdio: 'pipe' })
+
+  // Re-apply only the files Claude legitimately wrote
+  for (const filePath of legitimateWrites) {
+    try {
+      execFileSync('git', ['add', filePath])
+    } catch {
+      core.warning(`Could not stage ${filePath}`)
+    }
+  }
 
   const stagedFiles = execSync('git diff --cached --name-only').toString().trim()
   if (!stagedFiles) {
@@ -42898,10 +42910,9 @@ async function run() {
   }
 
   core.info(`Staged files:\n${stagedFiles}`)
-  execSync(
-    `git commit -m "fix(#${issueNumber}): ${result.summary.replace(/"/g, "'").slice(0, 72)}"`,
-  )
-  execSync(`git push origin ${branchName}`)
+  const commitMsg = `fix(#${issueNumber}): ${result.summary.slice(0, 72)}`
+  execFileSync('git', ['commit', '-m', commitMsg])
+  execFileSync('git', ['push', 'origin', branchName])
 
   const { data: pr } = await octokit.rest.pulls.create({
     owner,
@@ -42944,13 +42955,13 @@ async function run() {
   }
 }
 
-async function runAgenticLoop(client, model, prompt) {
+async function runAgenticLoop(client, model, prompt, legitimateWrites) {
   const messages = [{ role: 'user', content: prompt }]
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     const response = await client.messages.create({
       model,
-      max_tokens: 4096,
+      max_tokens: 8192,
       system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
       tools: buildTools(),
       messages,
@@ -43003,7 +43014,7 @@ async function runAgenticLoop(client, model, prompt) {
     for (const toolUse of toolUses) {
       let result
       try {
-        result = executeTool(toolUse.name, toolUse.input)
+        result = executeTool(toolUse.name, toolUse.input, legitimateWrites)
         core.info(
           `  ${toolUse.name}(${JSON.stringify(toolUse.input)}) → ${String(result).slice(0, 120)}`,
         )
@@ -43025,7 +43036,7 @@ async function runAgenticLoop(client, model, prompt) {
   return { summary: 'Fix implemented (max iterations reached)' }
 }
 
-function executeTool(name, input) {
+function executeTool(name, input, legitimateWrites) {
   switch (name) {
     case 'read_file': {
       const abs = safePath(input.path)
@@ -43038,10 +43049,15 @@ function executeTool(name, input) {
       return content
     }
     case 'write_file': {
+      if (input.content === undefined || input.content === null) {
+        return 'Error: content parameter was missing (the model response may have been truncated). Please retry with the complete file content.'
+      }
       const abs = safePath(input.path)
       fs.mkdirSync(path.dirname(abs), { recursive: true })
       fs.writeFileSync(abs, input.content, 'utf8')
-      return `Written: ${input.path} (${input.content.length} chars)`
+      const relPath = path.relative(REPO_ROOT, abs)
+      legitimateWrites.add(relPath)
+      return `Written: ${relPath} (${input.content.length} chars)`
     }
     case 'list_files': {
       const abs = safePath(input.path || '.')
@@ -43065,6 +43081,11 @@ function executeTool(name, input) {
 }
 
 function safePath(filePath) {
+  if (typeof filePath !== 'string') throw new Error(`Path must be a string, got ${typeof filePath}`)
+  // Reject suspicious characters that could corrupt git commands or filenames
+  if (/['";\r\n\0]/.test(filePath)) {
+    throw new Error(`Invalid characters in path: ${JSON.stringify(filePath)}`)
+  }
   const resolved = path.resolve(REPO_ROOT, filePath)
   const boundary = REPO_ROOT + path.sep
   if (resolved !== REPO_ROOT && !resolved.startsWith(boundary)) {

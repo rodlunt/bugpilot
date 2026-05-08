@@ -42831,7 +42831,23 @@ async function run() {
   }
 
   const structured = parseStructuredBlock(issue.body)
+  const issueUrl = `https://github.com/${owner}/${repo}/issues/${issue.number}`
   core.info(`Triaging issue #${issue.number} (type: ${structured?.type ?? 'unknown'})`)
+
+  // Feature requests don't need AI triage — just acknowledge and notify
+  if (structured?.type === 'feature' || labelNames.includes('enhancement')) {
+    await octokit.rest.issues.createComment({
+      owner,
+      repo,
+      issue_number: issue.number,
+      body: `### Feature request logged\n\nThanks for the suggestion — this has been added to the backlog for review. [View issue](${issueUrl})`,
+    })
+    const ntfyTopic = core.getInput('ntfy-topic')
+    if (ntfyTopic) {
+      await sendNtfyFeature({ ntfyTopic, issue, issueUrl })
+    }
+    return
+  }
 
   const client = new Anthropic.default({ apiKey })
 
@@ -42885,7 +42901,7 @@ async function run() {
   const ntfyTopic = core.getInput('ntfy-topic')
   const webhookSecret = core.getInput('webhook-secret')
   if (ntfyTopic) {
-    await sendNtfy({ ntfyTopic, webhookSecret, issue, triage, owner, repo })
+    await sendNtfy({ ntfyTopic, webhookSecret, issue, issueUrl, triage, owner, repo })
   }
 }
 
@@ -42987,8 +43003,29 @@ function deriveLabels(triage) {
   return labels
 }
 
-async function sendNtfy({ ntfyTopic, webhookSecret, issue, triage, owner, repo }) {
-  const issueUrl = `https://github.com/${owner}/${repo}/issues/${issue.number}`
+async function sendNtfyFeature({ ntfyTopic, issue, issueUrl }) {
+  const title = `Feature request: ${issue.title.replace(/^\[.*?\]\s*Feature:\s*/, '').slice(0, 80)}`
+  const payload = {
+    topic: ntfyTopic.replace(/^https?:\/\/ntfy\.sh\//, ''),
+    title,
+    message: 'New feature request logged.',
+    actions: [
+      { action: 'view', label: 'View request', url: issueUrl },
+    ],
+  }
+  const res = await fetch('https://ntfy.sh', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) {
+    core.warning(`NTFY notification failed: ${res.status} ${await res.text()}`)
+  } else {
+    core.info('NTFY feature notification sent')
+  }
+}
+
+async function sendNtfy({ ntfyTopic, webhookSecret, issue, issueUrl, triage, owner, repo }) {
   const workerBase = process.env.BUGPILOT_WORKER_URL
 
   const typeLabel = triage.classification === 'feature' ? 'Feature' : 'Bug'

@@ -22,6 +22,7 @@ export class BugPilotWidget {
     this._type = 'bug'
     this._screenshot = null
     this._submitting = false
+    this._autoCloseTimer = null
     this._inject()
     this._render()
     this._bind()
@@ -305,7 +306,7 @@ export class BugPilotWidget {
       const { issueUrl } = await res.json()
       this._showStatus('success', issueUrl && /^https:\/\/github\.com\//.test(issueUrl) ? issueUrl : null)
       this._reset()
-      setTimeout(() => this.close(), 3000)
+      this._autoCloseTimer = setTimeout(() => this.close(), 3000)
     } catch (err) {
       this._showError(`Failed to submit: ${err.message}`)
       console.error('[bugpilot] submit failed', err)
@@ -362,6 +363,8 @@ export class BugPilotWidget {
   }
 
   close() {
+    clearTimeout(this._autoCloseTimer)
+    this._autoCloseTimer = null
     this._isOpen = false
     this._dialog.classList.remove('bp-visible')
     this._backdrop.classList.remove('bp-visible')

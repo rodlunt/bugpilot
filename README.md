@@ -2,6 +2,12 @@
 
 Drop-in feedback and bug-capture widget with structured issue creation, AI triage via Claude, and NTFY action notifications.
 
+![Trigger button](https://raw.githubusercontent.com/rodlunt/bugpilot/main/.github/assets/trigger.png)
+
+| Bug report | Feature request |
+|---|---|
+| ![Bug form](https://raw.githubusercontent.com/rodlunt/bugpilot/main/.github/assets/bug-form.png) | ![Feature form](https://raw.githubusercontent.com/rodlunt/bugpilot/main/.github/assets/feature-form.png) |
+
 ## What it does
 
 1. **Capture** — a lightweight widget embeds in any web app. Users submit a bug report or feature request; the widget auto-collects viewport, browser, OS, and URL context plus an optional screenshot.
@@ -52,7 +58,7 @@ npx wrangler deploy
 
 Add to your repo's workflow:
 ```yaml
-- uses: rodlunt/bugpilot/actions/triage@main
+- uses: rodlunt/bugpilot/actions/triage@v1
   with:
     anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
     ntfy-topic: ${{ secrets.NTFY_TOPIC }}                    # optional
@@ -64,7 +70,7 @@ Add to your repo's workflow:
 
 Add to your repo's workflow — triggered by `workflow_dispatch` with an `issue_number` input, or automatically via the NTFY 🟢 Approve button once the Worker is deployed:
 ```yaml
-- uses: rodlunt/bugpilot/actions/apply-fix@main
+- uses: rodlunt/bugpilot/actions/apply-fix@v1
   with:
     issue-number: ${{ github.event.inputs.issue_number }}
     anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -92,4 +98,4 @@ Also required: **Settings → Actions → General → tick "Allow GitHub Actions
 
 ## Licence
 
-TBD — likely MIT for the widget, proprietary for a future hosted tier.
+[MIT](./LICENSE)

@@ -22,11 +22,11 @@ Drop-in feedback and bug-capture widget with structured issue creation, AI triag
 - **Theme-agnostic.** CSS custom properties inherit from the host app; the widget looks native.
 - **BYO API key.** The Actions are reusable GitHub Actions — consumers supply their own `ANTHROPIC_API_KEY`.
 - **No external CDN required.** Screenshots are stored in a branch of your own repo.
-- **No lap required.** The full pipeline from user report to merged fix can run without touching a laptop.
+- **No laptop required.** The full pipeline from user report to merged fix can run without touching a laptop.
 
 ## Status
 
-M1, M2, and M3 complete and working end-to-end. See [PLANNING.md](./PLANNING.md) for the full roadmap.
+M1, M2, and M3 complete and working end-to-end.
 
 ## Getting started (development)
 

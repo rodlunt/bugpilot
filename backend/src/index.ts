@@ -202,7 +202,12 @@ const SCREENSHOTS_BRANCH = 'bug-report-screenshots'
 async function uploadScreenshot(dataUrl: string, env: Env): Promise<string | null> {
   try {
     const [owner, repo] = env.GITHUB_REPO.split('/')
-    const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, '')
+    const match = dataUrl.match(/^data:image\/(png|jpeg|gif|webp);base64,/)
+    if (!match) {
+      console.error('[bugpilot] screenshot rejected: unsupported MIME type')
+      return null
+    }
+    const base64 = dataUrl.slice(match[0].length)
     const filename = `screenshots/${crypto.randomUUID()}.png`
     const headers = {
       Authorization: `Bearer ${env.GITHUB_TOKEN}`,

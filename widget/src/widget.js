@@ -37,7 +37,8 @@ export class BugPilotWidget {
   }
 
   _render() {
-    const pos = this._cfg.position
+    const VALID_POSITIONS = new Set(['bottom-right', 'bottom-left', 'top-right', 'top-left'])
+    const pos = VALID_POSITIONS.has(this._cfg.position) ? this._cfg.position : 'bottom-right'
 
     this._trigger = document.createElement('button')
     this._trigger.className = `bp-trigger bp-trigger--${pos}`
@@ -46,8 +47,10 @@ export class BugPilotWidget {
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
       </svg>
-      ${this._cfg.triggerLabel}
     `
+    const triggerLabel = document.createElement('span')
+    triggerLabel.textContent = this._cfg.triggerLabel
+    this._trigger.appendChild(triggerLabel)
 
     this._backdrop = document.createElement('div')
     this._backdrop.className = 'bp-backdrop'

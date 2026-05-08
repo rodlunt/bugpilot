@@ -1,8 +1,9 @@
 # Ignore vscode AI rules
 .github/instructions/codacy.instructions.md
 
-# Wrangler local secrets
+# Wrangler local state
 .dev.vars
+.wrangler/
 
 # Node / widget
 node_modules/

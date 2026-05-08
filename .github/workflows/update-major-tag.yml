@@ -1,26 +1,31 @@
-name: Update major version tag
+name: Release
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
 
 jobs:
-  tag:
+  release:
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: gh release create "$TAG" --title "$TAG" --generate-notes
+
       - name: Move major version tag
         env:
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ github.ref_name }}
         run: |
           MAJOR=$(echo "$TAG" | grep -oE '^v[0-9]+')
-          if [ -z "$MAJOR" ]; then
-            echo "Tag $TAG is not semver — skipping"
-            exit 0
-          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -f "$MAJOR"
           git push origin "$MAJOR" --force
-          echo "Moved $MAJOR to $TAG"
+          echo "Moved $MAJOR → $TAG"

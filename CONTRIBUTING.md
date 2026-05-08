@@ -33,6 +33,12 @@ npm run build  # compiles index.js → dist/index.js via ncc
 
 The action bundles (`dist/index.js`) are committed to the repo. Always rebuild and commit `dist/` after changing `index.js` in either action.
 
+**To cut a release** (maintainers only):
+```bash
+./release.sh v1.0.1
+```
+This rebuilds the action bundles, commits if needed, tags, and pushes. The release workflow creates the GitHub release and moves the `v1` tag automatically.
+
 ## Making a pull request
 
 1. Fork the repo and create a branch from `main`.

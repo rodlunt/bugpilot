@@ -9,5 +9,11 @@ compatibility_flags = ["nodejs_compat"]
 # WEBHOOK_SECRET    — shared secret for /webhook/apply-fix (generate with: openssl rand -hex 16)
 
 [vars]
-# Non-secret defaults — override per deployment
+# ALLOWED_ORIGIN controls the Access-Control-Allow-Origin response header.
+# "*" is the open default — anyone can POST from any origin (fine for local dev,
+# but before deploying to production change this to your actual domain so that
+# browser-based submissions are restricted to your site:
+#   ALLOWED_ORIGIN = "https://yourapp.com"
+# Note: CORS headers only affect browser requests. Server-side or curl requests
+# bypass CORS regardless, so this is not a substitute for rate limiting.
 ALLOWED_ORIGIN = "*"

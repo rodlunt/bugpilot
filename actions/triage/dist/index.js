@@ -43009,7 +43009,7 @@ async function sendNtfyFeature({ ntfyTopic, issue, issueUrl }) {
     title: 'Feature request submitted',
     message: issue.title.replace(/^\[.*?\]\s*Feature:\s*/, '').slice(0, 120),
     actions: [
-      { action: 'view', label: 'View request', url: issueUrl },
+      { action: 'view', label: '🔵 View request', url: issueUrl },
     ],
   }
   const res = await fetch('https://ntfy.sh', {
@@ -43036,17 +43036,24 @@ async function sendNtfy({ ntfyTopic, webhookSecret, issue, issueUrl, triage, own
   if (workerBase && webhookSecret) {
     actions.push({
       action: 'http',
-      label: 'Apply fix',
+      label: '🟢 Approve',
       url: `${workerBase}/webhook/apply-fix`,
       method: 'POST',
       headers: { 'x-webhook-secret': webhookSecret },
       body: JSON.stringify({ issue_number: issue.number, owner, repo }),
     })
+  } else {
+    // Stub until apply-fix Worker endpoint is deployed
+    actions.push({
+      action: 'view',
+      label: '🟢 Approve',
+      url: issueUrl,
+    })
   }
 
   actions.push({
     action: 'view',
-    label: 'Manual review',
+    label: '🔴 Manual review',
     url: issueUrl,
   })
 

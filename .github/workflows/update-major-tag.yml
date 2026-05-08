@@ -1,0 +1,26 @@
+name: Update major version tag
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Move major version tag
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          MAJOR=$(echo "$TAG" | grep -oE '^v[0-9]+')
+          if [ -z "$MAJOR" ]; then
+            echo "Tag $TAG is not semver — skipping"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f "$MAJOR"
+          git push origin "$MAJOR" --force
+          echo "Moved $MAJOR to $TAG"

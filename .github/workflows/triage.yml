@@ -15,3 +15,5 @@ jobs:
       - uses: ./actions/triage
         with:
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          ntfy-topic: ${{ secrets.NTFY_TOPIC }}
+          webhook-secret: ${{ secrets.WEBHOOK_SECRET }}

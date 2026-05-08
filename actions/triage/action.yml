@@ -5,11 +5,17 @@ inputs:
     description: 'Anthropic API key (BYO)'
     required: true
   github-token:
-    description: 'GitHub token with issues:write'
+    description: 'GitHub token with issues:write and actions:write'
     default: ${{ github.token }}
   model:
     description: 'Claude model ID'
     default: 'claude-sonnet-4-6'
+  ntfy-topic:
+    description: 'NTFY topic URL (e.g. https://ntfy.sh/your-topic). Leave empty to skip notifications.'
+    required: false
+  webhook-secret:
+    description: 'Shared secret for the apply-fix Worker webhook endpoint'
+    required: false
 runs:
   using: 'node20'
   main: 'dist/index.js'

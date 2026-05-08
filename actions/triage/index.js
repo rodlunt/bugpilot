@@ -84,6 +84,12 @@ async function run() {
       labels: newLabels,
     })
   }
+
+  const ntfyTopic = core.getInput('ntfy-topic')
+  const webhookSecret = core.getInput('webhook-secret')
+  if (ntfyTopic) {
+    await sendNtfy({ ntfyTopic, webhookSecret, issue, triage, owner, repo })
+  }
 }
 
 function triageTool() {
@@ -182,6 +188,53 @@ function deriveLabels(triage) {
   if (classMap[triage.classification]) labels.push(classMap[triage.classification])
   if (triage.severity) labels.push(`severity:${triage.severity}`)
   return labels
+}
+
+async function sendNtfy({ ntfyTopic, webhookSecret, issue, triage, owner, repo }) {
+  const issueUrl = `https://github.com/${owner}/${repo}/issues/${issue.number}`
+  const workerBase = process.env.BUGPILOT_WORKER_URL
+
+  const typeLabel = triage.classification === 'feature' ? 'Feature' : 'Bug'
+  const severityPart = triage.severity ? ` · ${triage.severity}` : ''
+  const title = `${typeLabel}${severityPart}: ${issue.title.replace(/^\[.*?\]\s*(?:Bug|Feature):\s*/, '').slice(0, 80)}`
+
+  const messageParts = []
+  if (triage.proposed_fix) messageParts.push(`Fix: ${triage.proposed_fix}`)
+  if (triage.response_draft) messageParts.push(`Response: ${triage.response_draft}`)
+  const message = messageParts.join('\n\n') || 'Triage complete.'
+
+  const actions = []
+
+  if (workerBase && webhookSecret) {
+    actions.push({
+      action: 'http',
+      label: 'Apply fix',
+      url: `${workerBase}/webhook/apply-fix`,
+      method: 'POST',
+      headers: { 'x-webhook-secret': webhookSecret },
+      body: JSON.stringify({ issue_number: issue.number, owner, repo }),
+    })
+  }
+
+  actions.push({
+    action: 'view',
+    label: 'Manual review',
+    url: issueUrl,
+  })
+
+  const payload = { topic: ntfyTopic.replace(/^https?:\/\/ntfy\.sh\//, ''), title, message, actions }
+
+  const res = await fetch('https://ntfy.sh', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+
+  if (!res.ok) {
+    core.warning(`NTFY notification failed: ${res.status} ${await res.text()}`)
+  } else {
+    core.info('NTFY notification sent')
+  }
 }
 
 async function ensureLabelsExist(octokit, owner, repo, labels) {

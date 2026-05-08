@@ -187,7 +187,13 @@ export class BugPilotWidget {
       `${ctx.viewport.w}×${ctx.viewport.h}`,
       new URL(ctx.url).pathname,
     ]
-    chips.innerHTML = fields.map((f) => `<span class="bp-chip">${f}</span>`).join('')
+    chips.textContent = ''
+    fields.forEach((f) => {
+      const span = document.createElement('span')
+      span.className = 'bp-chip'
+      span.textContent = f
+      chips.appendChild(span)
+    })
   }
 
   _onTypeChange(type) {

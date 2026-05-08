@@ -5,49 +5,63 @@ Branch: `main`
 ## Commits this session
 
 ```
-50481e5 feat(m1): scaffold widget and Cloudflare Worker
-390475d docs: add CLAUDE.md with architecture and open decisions
-8511f71 chore: project setup — labels, milestones, issue form, folder structure
-1659746 chore: initial planning doc and README
+605b567 feat(triage): always show approve/manual review buttons with emoji colours
+e75f7df feat: replace R2 with GitHub branch for screenshots; tighten NTFY messages
+4cc401a feat(triage): skip Claude for feature requests, post simple ack + NTFY view button
+257511e chore: ignore wrangler local state directory
+1985560 fix(triage): add contents:read permission for private repo checkout
+482c5a5 feat(triage): NTFY notification with Apply fix / Manual review buttons
+53ad55f feat(m2): triage action + two-path widget form (bug / feature)
 (+ this session-end housekeeping commit, about to land)
 ```
 
-## Files touched (25 files)
+## What was built
 
-Widget package: `widget/src/index.js`, `widget.js`, `context.js`, `screenshot.js`, `styles.css`, `vite.config.js`, `package.json`, `test/index.html`
-Backend (Cloudflare Worker): `backend/src/index.ts`, `wrangler.toml`, `tsconfig.json`, `package.json`
-Project setup: `CLAUDE.md`, `README.md`, `.gitignore`, `.github/issue-baseline.json`, `.github/ISSUE_TEMPLATE/issue.yml`, `.vscode/settings.json`
+**Widget (M1 complete):**
+- Two-path form: Bug/Usability (what happened, expected behaviour, steps, frequency, impact) and Feature/Feedback (ask, why, priority)
+- Type picker tabs at top of dialog; dialog title updates dynamically
+- Context chips fixed: now use DOM creation instead of innerHTML (XSS fix)
 
-## Code review fixes applied this session
+**Cloudflare Worker (M1 complete):**
+- Issues structured by type (bug vs feature) with different body layouts
+- Screenshots committed to `bug-report-screenshots` branch (no R2 required) — same approach as BR360
+- `bug`/`enhancement` labels applied automatically based on report type
 
-Six issues found by code review and fixed before commit:
-
-1. XSS: `_showStatus` now uses DOM creation instead of `innerHTML` for the issue URL link
-2. CORS bypass: Worker now returns `env.ALLOWED_ORIGIN` directly instead of falling back to `*`
-3. Label injection: Worker ignores client-supplied labels; always uses `['user-feedback']`
-4. html2canvas: removed conflicting `allowTaint: true` (was contradicting `useCORS: true`)
-5. R2 key entropy: switched to `crypto.randomUUID()` from weak `Date.now() + random`
-6. Screenshot size guard: Worker returns 413 if screenshot base64 exceeds 4 MB
-7. `destroy()`: now removes DOM nodes and the document keydown listener cleanly
+**Triage Action (M2 complete):**
+- Reusable GitHub Action at `actions/triage/` — consumers use `uses: rodlunt/bugpilot/actions/triage@v1`
+- Bug reports: Claude triage via tool use, comment posted, triage labels applied
+- Feature requests: simple acknowledgement comment only (no Claude call)
+- NTFY notifications: bug gets 🟢 Approve + 🔴 Manual review; feature gets 🔵 View request
+- Approve button is a stub (opens issue) until apply-fix workflow is built
 
 ## Verification
 
-- Widget build: VERIFIED clean (`npm run build` in `widget/`, no warnings or errors)
-- Worker: GUESSING clean (TypeScript compiles via wrangler; not deployed or `wrangler dev` tested yet)
-- Test suite: skipped — no test setup exists yet (root has no package.json; tests are an M1 remaining item)
+- Widget build: VERIFIED clean
+- Worker TypeScript: VERIFIED clean
+- Triage action bundle: VERIFIED clean
+- End-to-end test: VERIFIED working (issues created, triage running, NTFY firing)
 
-## Open GitHub issues (7 open, 0 untriaged)
+## Issues closed this session
 
-All 7 issues were created as part of the initial setup and map to PLANNING.md milestones. Issues #1, #2, #3 (widget trigger/form, screenshot, theming) are partially done by this session's scaffold but not complete.
+Closed #1, #2, #3, #5, #6 (M1/M2 milestones: widget, screenshot, theming, triage, NTFY)
+Closed #8-18 (all Test Harness test submissions)
 
-Note: Issue #4 references a "Flask route" — the decision changed to Cloudflare Worker. That issue title is stale.
+## Open issues (2 remaining)
+
+- #4 — "Backend: Flask route..." title is stale (should be Cloudflare Worker). Low priority rename.
+- #7 — Apply-fix workflow: Claude implements fix, opens PR. **This is next.**
 
 ## GitHub Issues drift
 
-The six default GitHub labels (duplicate, good first issue, help wanted, invalid, question, wontfix) and the four project milestones (M1–M4) are not in the baseline. The M1–M4 milestones are correct and intentional. The default labels are harmless noise. No action needed unless you want to tidy the baseline.
+11 new labels in repo not in baseline (triage/severity labels created by the action, plus GitHub defaults). Harmless — baseline does not need updating unless you want to enforce label hygiene across projects.
+
+## Security notes
+
+- XSS in context chips (_populateContext) fixed this session: switched from innerHTML to DOM creation
+- ensureLabelsExist now re-throws non-404 errors instead of swallowing them
+- NTFY webhook secret is visible in NTFY app notification history (known trade-off with NTFY HTTP actions)
+- Worker endpoint accepts anonymous POSTs by design (per CLAUDE.md) — ALLOWED_ORIGIN is CORS-only, not a true auth gate
 
 ## Suggested starting point (LIKELY)
 
-Wire up the Worker to a real Cloudflare R2 bucket and do a live end-to-end test: `wrangler dev` in `backend/`, `npm run dev` in `widget/`, submit a report, and verify the GitHub issue is created with the screenshot embedded. The three steps required are documented in the README (R2 bucket creation, public access, placeholder substitution).
-
-Once that passes manually, create a simple integration test and close issues #1, #2, #3.
+Build the apply-fix workflow (issue #7). Three parts: (1) `actions/apply-fix/` action that reads the issue and triage comment, calls Claude with read_file/write_file tools, commits a fix to a `fix/issue-N` branch, and opens a PR; (2) `.github/workflows/apply-fix.yml` triggered by `workflow_dispatch` with `issue_number` input; (3) `/webhook/apply-fix` endpoint in the Worker so the NTFY 🟢 Approve button triggers the dispatch. Once built, tag a `v1` release so the action is consumable by external repos.

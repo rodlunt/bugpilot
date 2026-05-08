@@ -4,21 +4,29 @@ Drop-in feedback and bug-capture widget with structured issue creation, AI triag
 
 ## What it does
 
-1. **Capture** — a lightweight widget embeds in any web app. Users describe a bug or give feedback, optionally attach a screenshot, and submit. The widget auto-collects viewport, browser, device, and URL context.
-2. **Create** — a structured GitHub issue is created with all captured data in a consistent machine-readable format.
-3. **Triage** — a Claude GitHub Action reviews the issue: classifies it (bug / feature / spam / not-feasible), checks if it is logical and reproducible, and drafts a proposed fix or response.
-4. **Notify** — an NTFY notification is sent with the classification and proposed fix. Action buttons let you apply the fix, dismiss, or defer — directly from your phone.
+1. **Capture** — a lightweight widget embeds in any web app. Users submit a bug report or feature request; the widget auto-collects viewport, browser, OS, and URL context plus an optional screenshot.
+2. **Create** — a structured GitHub issue is created with all captured data in a consistent machine-readable format. Screenshots are committed to a `bug-report-screenshots` branch and embedded as images.
+3. **Triage** — a reusable Claude GitHub Action fires on every new issue. Bugs are classified, severity assessed, and a proposed fix drafted. Feature requests receive a simple acknowledgement. A comment is posted and triage labels are applied automatically.
+4. **Notify** — an NTFY push notification is sent to the site owner with the proposed fix summary and two action buttons: 🟢 Approve (triggers apply-fix workflow) and 🔴 Manual review (opens the issue).
+
+## Widget: two report paths
+
+The widget presents two tabs:
+
+**Bug / Usability:** what happened, expected behaviour, steps to reproduce (optional), frequency, impact.
+
+**Feature / Feedback:** what would you like, why do you need it (optional), priority.
 
 ## Design goals
 
 - **Drop-in, minimal setup.** One script tag. One config object. Works.
 - **Theme-agnostic.** CSS custom properties inherit from the host app; the widget looks native.
-- **Multi-project.** The widget package is host-agnostic. Each project wires up its own GitHub repo and NTFY topic; the widget doesn't care.
-- **Sellable.** The widget + Action + notification loop is a self-contained product. Future: hosted backend option so consumers don't need to self-host.
+- **BYO API key.** The triage Action is a reusable GitHub Action — consumers supply their own `ANTHROPIC_API_KEY`.
+- **No external CDN required.** Screenshots are stored in a branch of your own repo.
 
 ## Status
 
-M1 in progress. Widget and Cloudflare Worker are scaffolded; not yet wired to a live R2 bucket or deployed. See [PLANNING.md](./PLANNING.md) for the full roadmap.
+M1 and M2 complete. Widget, Worker, and triage Action are working end-to-end. Apply-fix workflow (M3) is next. See [PLANNING.md](./PLANNING.md) for the full roadmap.
 
 ## Getting started (development)
 
@@ -32,17 +40,32 @@ npm run build      # produces dist/bugpilot.es.js, .umd.js, .iife.js
 **Cloudflare Worker:**
 ```bash
 cd backend && npm install
-# Set secrets before running:
-wrangler secret put GITHUB_TOKEN   # fine-grained PAT: Issues write + Contents write
-wrangler secret put GITHUB_REPO    # "owner/repo"
-npx wrangler dev                   # local dev server on localhost:8787
+# Create backend/.dev.vars with:
+#   GITHUB_TOKEN=<classic PAT with repo scope>
+#   GITHUB_REPO=owner/repo
+#   ALLOWED_ORIGIN=http://localhost:5173
+npx wrangler dev   # local dev on localhost:8787
 npx wrangler deploy
 ```
 
-**R2 setup (required for screenshots):**
-1. Create a bucket named `bugpilot-screenshots` in your Cloudflare dashboard.
-2. Enable public access on the bucket to get a `pub-<id>.r2.dev` URL.
-3. Replace the placeholder in `backend/src/index.ts` (`uploadScreenshot`) with your actual `pub-<id>.r2.dev` domain.
+**Triage Action (consumers):**
+
+Add to your repo's workflow:
+```yaml
+- uses: rodlunt/bugpilot/actions/triage@v1
+  with:
+    anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+    ntfy-topic: ${{ secrets.NTFY_TOPIC }}          # optional
+    webhook-secret: ${{ secrets.WEBHOOK_SECRET }}  # optional, for apply-fix
+```
+
+**GitHub Actions secrets (this repo):**
+
+| Secret | Purpose |
+|---|---|
+| `ANTHROPIC_API_KEY` | Claude API key for triage |
+| `NTFY_TOPIC` | Full NTFY topic URL |
+| `WEBHOOK_SECRET` | Shared secret for apply-fix webhook |
 
 ## Licence
 

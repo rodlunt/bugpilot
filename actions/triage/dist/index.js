@@ -43087,7 +43087,8 @@ async function ensureLabelsExist(octokit, owner, repo, labels) {
   for (const label of labels) {
     try {
       await octokit.rest.issues.getLabel({ owner, repo, name: label })
-    } catch {
+    } catch (err) {
+      if (err.status !== 404) throw err
       await octokit.rest.issues.createLabel({
         owner,
         repo,

@@ -9,11 +9,11 @@ bugpilot is a drop-in feedback and bug-capture product. A user submits a bug rep
 ## Repository layout
 
 ```
-widget/          Vanilla JS package — the embeddable widget (npm + CDN IIFE script tag)
-actions/triage/  GitHub Action — Claude triage on issues.opened
+widget/             Vanilla JS package — the embeddable widget (npm + CDN IIFE script tag)
+widget/test/        Plain-HTML test harness for local widget development
+actions/triage/     GitHub Action — Claude triage on issues.opened
 actions/apply-fix/  GitHub Action — creates fix branch + PR via workflow_dispatch
-backend/         Cloudflare Worker — receives widget POST, commits screenshot to bug-report-screenshots branch, creates GitHub issue
-test/            Minimal plain-HTML test harness for local widget development
+backend/            Cloudflare Worker — receives widget POST, commits screenshot to bug-report-screenshots branch, creates GitHub issue
 ```
 
 ## Architecture: how the pieces connect

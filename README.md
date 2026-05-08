@@ -26,7 +26,7 @@ The widget presents two tabs:
 
 ## Status
 
-M1 and M2 complete. Widget, Worker, and triage Action are working end-to-end. Apply-fix workflow (M3) is next. See [PLANNING.md](./PLANNING.md) for the full roadmap.
+M1, M2, and M3 complete. Widget, Worker, triage Action, and apply-fix workflow are all working end-to-end. See [PLANNING.md](./PLANNING.md) for the full roadmap.
 
 ## Getting started (development)
 
@@ -55,17 +55,40 @@ Add to your repo's workflow:
 - uses: rodlunt/bugpilot/actions/triage@v1
   with:
     anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
-    ntfy-topic: ${{ secrets.NTFY_TOPIC }}          # optional
-    webhook-secret: ${{ secrets.WEBHOOK_SECRET }}  # optional, for apply-fix
+    ntfy-topic: ${{ secrets.NTFY_TOPIC }}                    # optional
+    webhook-secret: ${{ secrets.WEBHOOK_SECRET }}            # optional, for apply-fix
+    bugpilot-worker-url: ${{ secrets.BUGPILOT_WORKER_URL }}  # optional, for apply-fix
 ```
+
+**Apply-fix Action (consumers):**
+
+Add to your repo's workflow — triggered by `workflow_dispatch` with an `issue_number` input, or automatically via the NTFY 🟢 Approve button once the Worker is deployed:
+```yaml
+- uses: rodlunt/bugpilot/actions/apply-fix@v1
+  with:
+    issue-number: ${{ github.event.inputs.issue_number }}
+    anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+    ntfy-topic: ${{ secrets.NTFY_TOPIC }}                    # optional
+```
+
+Also required: **Settings → Actions → General → tick "Allow GitHub Actions to create and approve pull requests".**
 
 **GitHub Actions secrets (this repo):**
 
 | Secret | Purpose |
 |---|---|
-| `ANTHROPIC_API_KEY` | Claude API key for triage |
+| `ANTHROPIC_API_KEY` | Claude API key for triage and apply-fix |
 | `NTFY_TOPIC` | Full NTFY topic URL |
-| `WEBHOOK_SECRET` | Shared secret for apply-fix webhook |
+| `WEBHOOK_SECRET` | Shared secret for the Worker `/webhook/apply-fix` endpoint |
+| `BUGPILOT_WORKER_URL` | Deployed Worker base URL — wires the 🟢 Approve NTFY button |
+
+**Worker secrets (set via `wrangler secret put`):**
+
+| Secret | Purpose |
+|---|---|
+| `GITHUB_TOKEN` | Classic PAT with `repo` scope |
+| `GITHUB_REPO` | `owner/repo` |
+| `WEBHOOK_SECRET` | Same value as the GitHub Actions secret above |
 
 ## Licence
 

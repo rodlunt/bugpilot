@@ -112,45 +112,71 @@ async function run() {
   const commitMsg = `fix(#${issueNumber}): ${result.summary.slice(0, 72)}`
   execFileSync('git', ['commit', '-m', commitMsg])
   execFileSync('git', ['push', 'origin', branchName])
-
-  const { data: pr } = await octokit.rest.pulls.create({
-    owner,
-    repo,
-    title: `fix(#${issueNumber}): ${result.summary.slice(0, 72)}`,
-    head: branchName,
-    base: 'main',
-    body: [
-      `Fixes #${issueNumber}`,
-      '',
-      result.summary,
-      '',
-      '*Implemented by bugpilot + Claude*',
-    ].join('\n'),
-  })
-
-  core.info(`PR opened: ${pr.html_url}`)
-  core.setOutput('pr-url', pr.html_url)
   core.setOutput('branch', branchName)
 
+  let prUrl = null
+  try {
+    const { data: pr } = await octokit.rest.pulls.create({
+      owner,
+      repo,
+      title: `fix(#${issueNumber}): ${result.summary.slice(0, 72)}`,
+      head: branchName,
+      base: 'main',
+      body: [
+        `Fixes #${issueNumber}`,
+        '',
+        result.summary,
+        '',
+        '*Implemented by bugpilot + Claude*',
+      ].join('\n'),
+    })
+    prUrl = pr.html_url
+    core.info(`PR opened: ${prUrl}`)
+    core.setOutput('pr-url', prUrl)
+  } catch (err) {
+    if (err.status === 403) {
+      core.warning(
+        'PR creation blocked — enable "Allow GitHub Actions to create and approve pull requests" in Settings → Actions → General.',
+      )
+    } else {
+      throw err
+    }
+  }
+
+  const compareUrl = `https://github.com/${owner}/${repo}/compare/main...${branchName}`
   await octokit.rest.issues.createComment({
     owner,
     repo,
     issue_number: issueNumber,
-    body: [
-      '### bugpilot apply-fix',
-      '',
-      `**Status:** Fix implemented — PR ready for review.`,
-      `**Branch:** \`${branchName}\``,
-      `**Files changed:** ${stagedFiles.split('\n').length}`,
-      '',
-      `**Summary:** ${result.summary}`,
-      '',
-      `[View PR →](${pr.html_url})`,
-    ].join('\n'),
+    body: prUrl
+      ? [
+          '### bugpilot apply-fix',
+          '',
+          '**Status:** Fix implemented — PR ready for review.',
+          `**Branch:** \`${branchName}\``,
+          `**Files changed:** ${stagedFiles.split('\n').length}`,
+          '',
+          `**Summary:** ${result.summary}`,
+          '',
+          `[View PR →](${prUrl})`,
+        ].join('\n')
+      : [
+          '### bugpilot apply-fix',
+          '',
+          '**Status:** Fix committed to branch — open a PR manually.',
+          `**Branch:** \`${branchName}\``,
+          `**Files changed:** ${stagedFiles.split('\n').length}`,
+          '',
+          `**Summary:** ${result.summary}`,
+          '',
+          `[Compare & open PR →](${compareUrl})`,
+          '',
+          '> To auto-open PRs in future: **Settings → Actions → General → Workflow permissions** → tick "Allow GitHub Actions to create and approve pull requests".',
+        ].join('\n'),
   })
 
   if (ntfyTopic) {
-    await sendNtfy({ ntfyTopic, issue, pr })
+    await sendNtfy({ ntfyTopic, issue, prUrl: prUrl || compareUrl })
   }
 }
 
@@ -376,14 +402,14 @@ function buildPrompt(issue, triageComment) {
   return parts.join('\n')
 }
 
-async function sendNtfy({ ntfyTopic, issue, pr }) {
+async function sendNtfy({ ntfyTopic, issue, prUrl }) {
   const topic = ntfyTopic.replace(/^https?:\/\/ntfy\.sh\//, '')
   const payload = {
     topic,
     title: `Fix ready: #${issue.number}`,
-    message: `PR opened for "${issue.title.slice(0, 80)}". Ready to review and merge.`,
+    message: `Fix committed for "${issue.title.slice(0, 80)}". Ready to review.`,
     actions: [
-      { action: 'view', label: '🔍 Review PR', url: pr.html_url },
+      { action: 'view', label: '🔍 Review PR', url: prUrl },
       { action: 'view', label: '📋 View issue', url: issue.html_url },
     ],
   }

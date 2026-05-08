@@ -282,6 +282,49 @@
   cursor: not-allowed;
 }
 
+/* Type picker */
+.bp-type-picker {
+  display: flex;
+  gap: 6px;
+}
+
+.bp-type-btn {
+  flex: 1;
+  font-family: var(--bp-font);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--bp-text-muted);
+  background: var(--bp-surface-raised);
+  border: 1px solid var(--bp-border);
+  border-radius: var(--bp-radius-sm);
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.bp-type-btn:hover {
+  color: var(--bp-text);
+  border-color: var(--bp-text-muted);
+}
+
+.bp-type-btn--active {
+  color: var(--bp-primary);
+  background: rgba(99, 102, 241, 0.06);
+  border-color: var(--bp-primary);
+}
+
+/* Hidden field groups */
+.bp-fields--hidden {
+  display: none;
+}
+
+/* Two-column row for compact fields */
+.bp-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
 /* Status messages */
 .bp-status {
   font-family: var(--bp-font);

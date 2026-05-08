@@ -2,7 +2,7 @@ import { captureContext } from './context.js'
 import { captureScreenshot } from './screenshot.js'
 import cssText from './styles.css?inline'
 
-const CATEGORIES = [
+const BUG_CATEGORIES = [
   'UI / Visual issue',
   'Functionality bug',
   'Performance issue',
@@ -19,6 +19,7 @@ export class BugPilotWidget {
       triggerLabel: 'Feedback',
       ...config,
     }
+    this._type = 'bug'
     this._screenshot = null
     this._submitting = false
     this._inject()
@@ -37,7 +38,6 @@ export class BugPilotWidget {
   _render() {
     const pos = this._cfg.position
 
-    // Trigger button
     this._trigger = document.createElement('button')
     this._trigger.className = `bp-trigger bp-trigger--${pos}`
     this._trigger.setAttribute('aria-label', 'Open feedback form')
@@ -48,12 +48,10 @@ export class BugPilotWidget {
       ${this._cfg.triggerLabel}
     `
 
-    // Backdrop
     this._backdrop = document.createElement('div')
     this._backdrop.className = 'bp-backdrop'
     this._backdrop.setAttribute('aria-hidden', 'true')
 
-    // Dialog
     this._dialog = document.createElement('div')
     this._dialog.className = `bp-dialog bp-dialog--${pos}`
     this._dialog.setAttribute('role', 'dialog')
@@ -65,13 +63,22 @@ export class BugPilotWidget {
     document.body.appendChild(this._dialog)
     document.body.appendChild(this._trigger)
 
-    // Named refs into the dialog
-    this._categoryEl = this._dialog.querySelector('#bp-category')
-    this._descriptionEl = this._dialog.querySelector('#bp-description')
+    // Bug field refs
+    this._bugCategoryEl  = this._dialog.querySelector('#bp-bug-category')
+    this._whatHappenedEl = this._dialog.querySelector('#bp-what-happened')
+    this._expectedEl     = this._dialog.querySelector('#bp-expected')
+    this._stepsEl        = this._dialog.querySelector('#bp-steps')
+    this._frequencyEl    = this._dialog.querySelector('#bp-frequency')
+    this._impactEl       = this._dialog.querySelector('#bp-impact')
+    // Feature field refs
+    this._featureAskEl      = this._dialog.querySelector('#bp-feature-ask')
+    this._featureWhyEl      = this._dialog.querySelector('#bp-feature-why')
+    this._featurePriorityEl = this._dialog.querySelector('#bp-feature-priority')
+    // Common refs
     this._screenshotPreview = this._dialog.querySelector('#bp-screenshot-preview')
-    this._captureBtn = this._dialog.querySelector('#bp-capture-btn')
-    this._submitBtn = this._dialog.querySelector('#bp-submit-btn')
-    this._statusEl = this._dialog.querySelector('#bp-status')
+    this._captureBtn        = this._dialog.querySelector('#bp-capture-btn')
+    this._submitBtn         = this._dialog.querySelector('#bp-submit-btn')
+    this._statusEl          = this._dialog.querySelector('#bp-status')
 
     this._populateContext()
   }
@@ -87,17 +94,71 @@ export class BugPilotWidget {
         </button>
       </div>
       <div class="bp-body">
-        <div class="bp-field">
-          <label class="bp-label" for="bp-category">Category</label>
-          <select class="bp-select" id="bp-category">
-            <option value="">Select a category…</option>
-            ${CATEGORIES.map((c) => `<option value="${c}">${c}</option>`).join('')}
-          </select>
+        <div class="bp-type-picker">
+          <button class="bp-type-btn bp-type-btn--active" data-type="bug" type="button">Bug / Usability</button>
+          <button class="bp-type-btn" data-type="feature" type="button">Feature / Feedback</button>
         </div>
-        <div class="bp-field">
-          <label class="bp-label" for="bp-description">Description <span>(required)</span></label>
-          <textarea class="bp-textarea" id="bp-description" placeholder="What went wrong? What did you expect to happen?" rows="4"></textarea>
+
+        <div id="bp-fields-bug">
+          <div class="bp-field">
+            <label class="bp-label" for="bp-bug-category">Category</label>
+            <select class="bp-select" id="bp-bug-category">
+              <option value="">Select a category…</option>
+              ${BUG_CATEGORIES.map((c) => `<option value="${c}">${c}</option>`).join('')}
+            </select>
+          </div>
+          <div class="bp-field">
+            <label class="bp-label" for="bp-what-happened">What happened? <span>(required)</span></label>
+            <textarea class="bp-textarea" id="bp-what-happened" placeholder="Describe what went wrong. What did you see?" rows="3"></textarea>
+          </div>
+          <div class="bp-field">
+            <label class="bp-label" for="bp-expected">Expected behaviour <span>(required)</span></label>
+            <textarea class="bp-textarea" id="bp-expected" placeholder="What should have happened instead?" rows="2"></textarea>
+          </div>
+          <div class="bp-field">
+            <label class="bp-label" for="bp-steps">Steps to reproduce <span>(optional)</span></label>
+            <textarea class="bp-textarea" id="bp-steps" placeholder="1. Go to…&#10;2. Click…&#10;3. See error" rows="3"></textarea>
+          </div>
+          <div class="bp-field-row">
+            <div class="bp-field">
+              <label class="bp-label" for="bp-frequency">How often?</label>
+              <select class="bp-select" id="bp-frequency">
+                <option value="every-time">Every time</option>
+                <option value="most-times">Most of the time</option>
+                <option value="sometimes">Occasionally</option>
+                <option value="once">Just once</option>
+              </select>
+            </div>
+            <div class="bp-field">
+              <label class="bp-label" for="bp-impact">Impact</label>
+              <select class="bp-select" id="bp-impact">
+                <option value="blocking">Blocking</option>
+                <option value="degraded">Degraded</option>
+                <option value="cosmetic">Cosmetic</option>
+              </select>
+            </div>
+          </div>
         </div>
+
+        <div id="bp-fields-feature" class="bp-fields--hidden">
+          <div class="bp-field">
+            <label class="bp-label" for="bp-feature-ask">What would you like? <span>(required)</span></label>
+            <textarea class="bp-textarea" id="bp-feature-ask" placeholder="Describe the feature or improvement you'd like to see." rows="3"></textarea>
+          </div>
+          <div class="bp-field">
+            <label class="bp-label" for="bp-feature-why">Why do you need it? <span>(optional)</span></label>
+            <textarea class="bp-textarea" id="bp-feature-why" placeholder="What problem does this solve? Who else would benefit?" rows="2"></textarea>
+          </div>
+          <div class="bp-field">
+            <label class="bp-label" for="bp-feature-priority">Priority to you</label>
+            <select class="bp-select" id="bp-feature-priority">
+              <option value="critical">Critical to my workflow</option>
+              <option value="high">Would significantly help</option>
+              <option value="nice">Nice to have</option>
+            </select>
+          </div>
+        </div>
+
         <div class="bp-field">
           <span class="bp-label">Screenshot <span>(optional)</span></span>
           <div class="bp-screenshot-row">
@@ -129,13 +190,30 @@ export class BugPilotWidget {
     chips.innerHTML = fields.map((f) => `<span class="bp-chip">${f}</span>`).join('')
   }
 
+  _onTypeChange(type) {
+    this._type = type
+    this._dialog.querySelector('#bp-dialog-title').textContent =
+      type === 'bug' ? 'Report a bug' : 'Feature / Feedback'
+    this._dialog.querySelectorAll('.bp-type-btn').forEach((btn) => {
+      btn.classList.toggle('bp-type-btn--active', btn.dataset.type === type)
+    })
+    this._dialog.querySelector('#bp-fields-bug').classList.toggle('bp-fields--hidden', type !== 'bug')
+    this._dialog.querySelector('#bp-fields-feature').classList.toggle('bp-fields--hidden', type !== 'feature')
+    this._updateSubmit()
+  }
+
   _bind() {
     this._trigger.addEventListener('click', () => this.open())
     this._dialog.querySelector('#bp-close-btn').addEventListener('click', () => this.close())
     this._backdrop.addEventListener('click', () => this.close())
 
-    this._descriptionEl.addEventListener('input', () => this._updateSubmit())
-    this._categoryEl.addEventListener('change', () => this._updateSubmit())
+    this._dialog.querySelectorAll('.bp-type-btn').forEach((btn) => {
+      btn.addEventListener('click', () => this._onTypeChange(btn.dataset.type))
+    })
+
+    this._whatHappenedEl.addEventListener('input', () => this._updateSubmit())
+    this._expectedEl.addEventListener('input', () => this._updateSubmit())
+    this._featureAskEl.addEventListener('input', () => this._updateSubmit())
 
     this._captureBtn.addEventListener('click', async () => {
       this._captureBtn.disabled = true
@@ -164,7 +242,12 @@ export class BugPilotWidget {
   }
 
   _updateSubmit() {
-    const ready = this._descriptionEl.value.trim().length > 0
+    let ready
+    if (this._type === 'bug') {
+      ready = this._whatHappenedEl.value.trim().length > 0 && this._expectedEl.value.trim().length > 0
+    } else {
+      ready = this._featureAskEl.value.trim().length > 0
+    }
     this._submitBtn.disabled = !ready || this._submitting
   }
 
@@ -177,14 +260,29 @@ export class BugPilotWidget {
     this._statusEl.textContent = ''
 
     const ctx = captureContext()
-    const payload = {
-      category: this._categoryEl.value || null,
-      description: this._descriptionEl.value.trim(),
+    const base = {
+      type: this._type,
       screenshot: this._screenshot,
       context: ctx,
       projectName: this._cfg.projectName || document.title,
-      labels: this._cfg.labels || [],
     }
+
+    const payload = this._type === 'bug'
+      ? {
+          ...base,
+          description: this._whatHappenedEl.value.trim(),
+          bugCategory: this._bugCategoryEl.value || null,
+          expectedBehavior: this._expectedEl.value.trim(),
+          stepsToReproduce: this._stepsEl.value.trim() || null,
+          frequency: this._frequencyEl.value,
+          impact: this._impactEl.value,
+        }
+      : {
+          ...base,
+          description: this._featureAskEl.value.trim(),
+          problemStatement: this._featureWhyEl.value.trim() || null,
+          priority: this._featurePriorityEl.value,
+        }
 
     try {
       const res = await fetch(this._cfg.endpoint, {
@@ -233,8 +331,15 @@ export class BugPilotWidget {
   }
 
   _reset() {
-    this._categoryEl.value = ''
-    this._descriptionEl.value = ''
+    this._bugCategoryEl.value = ''
+    this._whatHappenedEl.value = ''
+    this._expectedEl.value = ''
+    this._stepsEl.value = ''
+    this._frequencyEl.value = 'every-time'
+    this._impactEl.value = 'blocking'
+    this._featureAskEl.value = ''
+    this._featureWhyEl.value = ''
+    this._featurePriorityEl.value = 'critical'
     this._screenshot = null
     this._screenshotPreview.src = ''
     this._screenshotPreview.classList.remove('bp-visible')
@@ -246,7 +351,8 @@ export class BugPilotWidget {
     this._isOpen = true
     this._dialog.classList.add('bp-visible')
     this._backdrop.classList.add('bp-visible')
-    this._descriptionEl.focus()
+    const firstField = this._type === 'bug' ? this._whatHappenedEl : this._featureAskEl
+    firstField.focus()
   }
 
   close() {

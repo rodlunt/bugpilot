@@ -1,0 +1,17 @@
+{
+  "name": "bugpilot-triage",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "ncc build index.js -o dist --license licenses.txt",
+    "dev": "node index.js"
+  },
+  "dependencies": {
+    "@actions/core": "^1.11.1",
+    "@actions/github": "^6.0.0",
+    "@anthropic-ai/sdk": "^0.39.0"
+  },
+  "devDependencies": {
+    "@vercel/ncc": "^0.38.3"
+  }
+}

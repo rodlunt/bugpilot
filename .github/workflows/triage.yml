@@ -1,0 +1,17 @@
+name: bugpilot triage
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    if: contains(github.event.issue.labels.*.name, 'user-feedback')
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./actions/triage
+        with:
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}

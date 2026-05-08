@@ -1,0 +1,15 @@
+name: 'bugpilot triage'
+description: 'Claude-powered triage for bugpilot issues — classifies, assesses severity, and drafts a proposed fix'
+inputs:
+  anthropic-api-key:
+    description: 'Anthropic API key (BYO)'
+    required: true
+  github-token:
+    description: 'GitHub token with issues:write'
+    default: ${{ github.token }}
+  model:
+    description: 'Claude model ID'
+    default: 'claude-sonnet-4-6'
+runs:
+  using: 'node20'
+  main: 'dist/index.js'

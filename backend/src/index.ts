@@ -1,16 +1,15 @@
 export interface Env {
   SCREENSHOTS: R2Bucket
   GITHUB_TOKEN: string
-  GITHUB_REPO: string       // "owner/repo"
-  ALLOWED_ORIGIN: string    // "*" or specific origin
+  GITHUB_REPO: string
+  ALLOWED_ORIGIN: string
 }
 
 interface SubmissionPayload {
+  type?: 'bug' | 'feature'
   description: string
-  category?: string | null
-  screenshot?: string | null  // base64 data URL
+  screenshot?: string | null
   projectName?: string
-  labels?: string[]
   context: {
     url: string
     viewport: { w: number; h: number }
@@ -22,11 +21,19 @@ interface SubmissionPayload {
     language?: string
     referrer?: string | null
   }
+  // Bug-specific
+  bugCategory?: string | null
+  expectedBehavior?: string | null
+  stepsToReproduce?: string | null
+  frequency?: string | null
+  impact?: string | null
+  // Feature-specific
+  problemStatement?: string | null
+  priority?: string | null
 }
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    const origin = request.headers.get('Origin') ?? ''
     const corsHeaders = {
       'Access-Control-Allow-Origin': env.ALLOWED_ORIGIN === '*' ? '*' : env.ALLOWED_ORIGIN,
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -68,7 +75,6 @@ async function handleFeedback(
     return jsonError('Worker misconfigured: GITHUB_REPO must be "owner/repo"', 500, corsHeaders)
   }
 
-  // Upload screenshot to R2 if provided (cap at ~3 MB base64)
   let screenshotUrl: string | null = null
   if (body.screenshot) {
     if (body.screenshot.length > 4_000_000) {
@@ -77,10 +83,11 @@ async function handleFeedback(
     screenshotUrl = await uploadScreenshot(body.screenshot, env)
   }
 
-  // Build the GitHub issue — ignore any labels sent by the client
   const issueTitle = buildTitle(body)
   const issueBody = buildIssueBody(body, screenshotUrl)
-  const labels = ['user-feedback']
+  const labels = body.type === 'feature'
+    ? ['user-feedback', 'enhancement']
+    : ['user-feedback', 'bug']
 
   const issueRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/issues`, {
     method: 'POST',
@@ -114,7 +121,6 @@ async function uploadScreenshot(dataUrl: string, env: Env): Promise<string | nul
     const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
     const key = `screenshots/${crypto.randomUUID()}.png`
     await env.SCREENSHOTS.put(key, bytes, { httpMetadata: { contentType: 'image/png' } })
-    // Public bucket URL — consumers must enable R2 public access for their bucket
     return `https://pub-REPLACE_WITH_YOUR_R2_ACCOUNT_ID.r2.dev/${key}`
   } catch (err) {
     console.error('[bugpilot] R2 screenshot upload failed', err)
@@ -124,19 +130,30 @@ async function uploadScreenshot(dataUrl: string, env: Env): Promise<string | nul
 
 function buildTitle(body: SubmissionPayload): string {
   const prefix = body.projectName ? `[${body.projectName}] ` : ''
-  const category = body.category ? `${body.category}: ` : ''
+  const typeLabel = body.type === 'feature' ? 'Feature: ' : 'Bug: '
   const desc = body.description.slice(0, 72)
-  return `${prefix}${category}${desc}${body.description.length > 72 ? '…' : ''}`
+  return `${prefix}${typeLabel}${desc}${body.description.length > 72 ? '…' : ''}`
 }
 
 function buildIssueBody(body: SubmissionPayload, screenshotUrl: string | null): string {
+  return body.type === 'feature'
+    ? buildFeatureBody(body, screenshotUrl)
+    : buildBugBody(body, screenshotUrl)
+}
+
+function buildBugBody(body: SubmissionPayload, screenshotUrl: string | null): string {
   const ctx = body.context
 
+  const stepsSection = body.stepsToReproduce
+    ? `## Steps to reproduce\n\n${body.stepsToReproduce}\n\n`
+    : ''
+
   const screenshotSection = screenshotUrl
-    ? `## Screenshot\n\n![Screenshot](${screenshotUrl})\n`
+    ? `## Screenshot\n\n![Screenshot](${screenshotUrl})\n\n`
     : ''
 
   const structured = JSON.stringify({
+    type: 'bug',
     url: ctx.url,
     viewport: ctx.viewport,
     userAgent: ctx.userAgent,
@@ -146,16 +163,32 @@ function buildIssueBody(body: SubmissionPayload, screenshotUrl: string | null): 
     timezone: ctx.timezone ?? null,
     language: ctx.language ?? null,
     referrer: ctx.referrer ?? null,
-    category: body.category ?? null,
+    bugCategory: body.bugCategory ?? null,
+    expectedBehavior: body.expectedBehavior ?? null,
+    stepsToReproduce: body.stepsToReproduce ?? null,
+    frequency: body.frequency ?? null,
+    impact: body.impact ?? null,
     projectName: body.projectName ?? null,
     screenshotUrl,
   })
 
-  return `## User report
+  return `## What happened
 
 ${body.description}
 
-## Context
+## Expected behaviour
+
+${body.expectedBehavior || '—'}
+
+${stepsSection}## Details
+
+| Field | Value |
+|---|---|
+| Category | ${body.bugCategory || '—'} |
+| Frequency | ${formatFrequency(body.frequency)} |
+| Impact | ${formatImpact(body.impact)} |
+
+## Environment
 
 | Field | Value |
 |---|---|
@@ -165,18 +198,91 @@ ${body.description}
 | OS | ${ctx.os} |
 | Timestamp | ${ctx.timestamp} |
 | Project | ${body.projectName ?? '—'} |
-| Category | ${body.category ?? '—'} |
 
-${screenshotSection}
-<!-- bugpilot:structured
+${screenshotSection}<!-- bugpilot:structured
 ${structured}
 bugpilot:end -->
 `
 }
 
+function buildFeatureBody(body: SubmissionPayload, screenshotUrl: string | null): string {
+  const ctx = body.context
+
+  const whySection = body.problemStatement
+    ? `## Problem it solves\n\n${body.problemStatement}\n\n`
+    : ''
+
+  const screenshotSection = screenshotUrl
+    ? `## Mockup / screenshot\n\n![Screenshot](${screenshotUrl})\n\n`
+    : ''
+
+  const structured = JSON.stringify({
+    type: 'feature',
+    url: ctx.url,
+    viewport: ctx.viewport,
+    userAgent: ctx.userAgent,
+    browser: ctx.browser,
+    os: ctx.os,
+    timestamp: ctx.timestamp,
+    timezone: ctx.timezone ?? null,
+    language: ctx.language ?? null,
+    referrer: ctx.referrer ?? null,
+    priority: body.priority ?? null,
+    problemStatement: body.problemStatement ?? null,
+    projectName: body.projectName ?? null,
+    screenshotUrl,
+  })
+
+  return `## Feature request
+
+${body.description}
+
+${whySection}## Details
+
+| Field | Value |
+|---|---|
+| Priority | ${formatPriority(body.priority)} |
+| Project | ${body.projectName ?? '—'} |
+| URL | ${ctx.url} |
+| Submitted | ${ctx.timestamp} |
+
+${screenshotSection}<!-- bugpilot:structured
+${structured}
+bugpilot:end -->
+`
+}
+
+function formatFrequency(v: string | null | undefined): string {
+  const map: Record<string, string> = {
+    'every-time': 'Every time',
+    'most-times': 'Most of the time',
+    'sometimes': 'Occasionally',
+    'once': 'Just once',
+  }
+  return map[v ?? ''] ?? '—'
+}
+
+function formatImpact(v: string | null | undefined): string {
+  const map: Record<string, string> = {
+    'blocking': 'Blocking — cannot continue',
+    'degraded': 'Degraded — workaround exists',
+    'cosmetic': 'Minor / cosmetic',
+  }
+  return map[v ?? ''] ?? '—'
+}
+
+function formatPriority(v: string | null | undefined): string {
+  const map: Record<string, string> = {
+    'critical': 'Critical to my workflow',
+    'high': 'Would significantly help',
+    'nice': 'Nice to have',
+  }
+  return map[v ?? ''] ?? '—'
+}
+
 function jsonError(message: string, status: number, corsHeaders: Record<string, string>): Response {
   return new Response(JSON.stringify({ ok: false, error: message }), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' } ,
   })
 }

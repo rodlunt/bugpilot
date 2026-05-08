@@ -1,8 +1,12 @@
 # Ignore vscode AI rules
 .github/instructions/codacy.instructions.md
 
+# Wrangler local secrets
+.dev.vars
+
 # Node / widget
 node_modules/
+# Action dist is intentionally committed — do not add dist/ here
 dist/
 build/
 *.tgz

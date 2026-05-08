@@ -18,3 +18,4 @@ jobs:
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           ntfy-topic: ${{ secrets.NTFY_TOPIC }}
           webhook-secret: ${{ secrets.WEBHOOK_SECRET }}
+          bugpilot-worker-url: ${{ secrets.BUGPILOT_WORKER_URL }}

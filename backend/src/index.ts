@@ -2,6 +2,7 @@ export interface Env {
   GITHUB_TOKEN: string
   GITHUB_REPO: string
   ALLOWED_ORIGIN: string
+  WEBHOOK_SECRET?: string
 }
 
 interface SubmissionPayload {
@@ -47,6 +48,10 @@ export default {
 
     if (request.method === 'POST' && url.pathname === '/feedback') {
       return handleFeedback(request, env, corsHeaders)
+    }
+
+    if (request.method === 'POST' && url.pathname === '/webhook/apply-fix') {
+      return handleApplyFix(request, env, corsHeaders)
     }
 
     return new Response('Not found', { status: 404, headers: corsHeaders })
@@ -112,6 +117,66 @@ async function handleFeedback(
     JSON.stringify({ ok: true, issueUrl: issue.html_url, issueNumber: issue.number }),
     { status: 201, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
   )
+}
+
+async function handleApplyFix(
+  request: Request,
+  env: Env,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  if (!env.WEBHOOK_SECRET) {
+    return jsonError('Apply-fix webhook not configured on this worker', 503, corsHeaders)
+  }
+
+  const secret = request.headers.get('x-webhook-secret')
+  if (secret !== env.WEBHOOK_SECRET) {
+    return jsonError('Unauthorized', 401, corsHeaders)
+  }
+
+  let body: { issue_number: number; owner: string; repo: string }
+  try {
+    body = await request.json()
+  } catch {
+    return jsonError('Invalid JSON body', 400, corsHeaders)
+  }
+
+  if (!body.issue_number || !body.owner || !body.repo) {
+    return jsonError('Missing required fields: issue_number, owner, repo', 400, corsHeaders)
+  }
+
+  const [configOwner, configRepo] = env.GITHUB_REPO.split('/')
+  if (body.owner !== configOwner || body.repo !== configRepo) {
+    return jsonError('Repo mismatch', 403, corsHeaders)
+  }
+
+  const dispatchRes = await fetch(
+    `https://api.github.com/repos/${body.owner}/${body.repo}/actions/workflows/apply-fix.yml/dispatches`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.GITHUB_TOKEN}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'User-Agent': 'bugpilot-worker/0.1',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ref: 'main',
+        inputs: { issue_number: String(body.issue_number) },
+      }),
+    },
+  )
+
+  if (!dispatchRes.ok) {
+    const text = await dispatchRes.text()
+    console.error('[bugpilot] workflow_dispatch failed', dispatchRes.status, text)
+    return jsonError('Failed to trigger apply-fix workflow', 502, corsHeaders)
+  }
+
+  return new Response(JSON.stringify({ ok: true }), {
+    status: 200,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  })
 }
 
 const SCREENSHOTS_BRANCH = 'bug-report-screenshots'

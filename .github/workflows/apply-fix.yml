@@ -1,0 +1,26 @@
+name: bugpilot apply-fix
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to fix'
+        required: true
+        type: string
+
+jobs:
+  apply-fix:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./actions/apply-fix
+        with:
+          issue-number: ${{ github.event.inputs.issue_number }}
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          ntfy-topic: ${{ secrets.NTFY_TOPIC }}

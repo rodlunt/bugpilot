@@ -103,8 +103,9 @@ async function run() {
 
   const ntfyTopic = core.getInput('ntfy-topic')
   const webhookSecret = core.getInput('webhook-secret')
+  const workerBase = core.getInput('bugpilot-worker-url') || process.env.BUGPILOT_WORKER_URL
   if (ntfyTopic) {
-    await sendNtfy({ ntfyTopic, webhookSecret, issue, issueUrl, triage, owner, repo })
+    await sendNtfy({ ntfyTopic, webhookSecret, workerBase, issue, issueUrl, triage, owner, repo })
   }
 }
 
@@ -227,8 +228,7 @@ async function sendNtfyFeature({ ntfyTopic, issue, issueUrl }) {
   }
 }
 
-async function sendNtfy({ ntfyTopic, webhookSecret, issue, issueUrl, triage, owner, repo }) {
-  const workerBase = process.env.BUGPILOT_WORKER_URL
+async function sendNtfy({ ntfyTopic, webhookSecret, workerBase, issue, issueUrl, triage, owner, repo }) {
 
   const severityPart = triage.severity ? ` [${triage.severity}]` : ''
   const title = `Bug${severityPart}: ${issue.title.replace(/^\[.*?\]\s*Bug:\s*/, '').slice(0, 80)}`

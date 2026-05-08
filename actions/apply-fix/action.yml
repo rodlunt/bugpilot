@@ -1,0 +1,21 @@
+name: 'bugpilot apply-fix'
+description: 'Claude-powered fix implementation for bugpilot bug reports — reads issue, implements fix, opens PR'
+inputs:
+  issue-number:
+    description: 'Issue number to fix'
+    required: true
+  anthropic-api-key:
+    description: 'Anthropic API key (BYO)'
+    required: true
+  github-token:
+    description: 'GitHub token with contents:write, issues:write, pull-requests:write'
+    default: ${{ github.token }}
+  model:
+    description: 'Claude model ID'
+    default: 'claude-sonnet-4-6'
+  ntfy-topic:
+    description: 'NTFY topic URL for follow-up notification. Leave empty to skip.'
+    required: false
+runs:
+  using: 'node20'
+  main: 'dist/index.js'

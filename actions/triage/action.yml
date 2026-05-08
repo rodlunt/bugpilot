@@ -16,6 +16,9 @@ inputs:
   webhook-secret:
     description: 'Shared secret for the apply-fix Worker webhook endpoint'
     required: false
+  bugpilot-worker-url:
+    description: 'Base URL of the deployed bugpilot Worker (e.g. https://bugpilot-worker.your-account.workers.dev). Required for the 🟢 Approve button to trigger apply-fix.'
+    required: false
 runs:
   using: 'node20'
   main: 'dist/index.js'

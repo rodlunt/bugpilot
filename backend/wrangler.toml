@@ -4,8 +4,9 @@ compatibility_date = "2024-12-18"
 compatibility_flags = ["nodejs_compat"]
 
 # Required secrets (set via: wrangler secret put GITHUB_TOKEN)
-# GITHUB_TOKEN   — classic PAT with repo scope (issues + contents write)
-# GITHUB_REPO    — "owner/repo"
+# GITHUB_TOKEN      — classic PAT with repo scope (issues + contents + actions write)
+# GITHUB_REPO       — "owner/repo"
+# WEBHOOK_SECRET    — shared secret for /webhook/apply-fix (generate with: openssl rand -hex 16)
 
 [vars]
 # Non-secret defaults — override per deployment

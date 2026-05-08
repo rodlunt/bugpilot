@@ -42798,219 +42798,373 @@ var __webpack_exports__ = {};
 const core = __nccwpck_require__(7484)
 const github = __nccwpck_require__(3228)
 const Anthropic = __nccwpck_require__(121)
+const fs = __nccwpck_require__(9896)
+const path = __nccwpck_require__(6928)
+const { execSync } = __nccwpck_require__(5317)
 
-const SYSTEM_PROMPT = `You are a senior engineer triaging user-submitted bug reports and feature requests.
-You will be given a structured report from bugpilot. Analyse it carefully and call the triage_report tool with your assessment.
+const REPO_ROOT = process.cwd()
+const MAX_ITERATIONS = 20
 
-For bugs:
-- Is it reproducible given the information provided?
-- What is the likely root cause?
-- What is the proposed fix? Be specific about what code or behaviour needs to change — one or two sentences, no actual code.
+const SYSTEM_PROMPT = `You are a senior engineer implementing a fix for a reported bug.
+You have access to the full repository via read_file, write_file, and list_files tools.
 
-For feature requests:
-- Is it feasible and well-defined?
-- What is the effort level?
-- proposed_fix should be null.
+Your job:
+1. Explore the relevant code using list_files and read_file
+2. Understand the bug and the triage team's proposed fix
+3. Implement the minimal change that resolves the bug
+4. Call report_done with a concise summary of what you changed
 
-Always draft a friendly, human response_draft to post back to the reporter.`
+Rules:
+- Read files before modifying them
+- Make the smallest change that fixes the bug — do not refactor unrelated code
+- Do not modify package.json, package-lock.json, or any lockfiles
+- Do not modify test files unless the bug is in a test
+- If the issue lacks enough information to implement a fix confidently, explain why in report_done without modifying any files`
 
 async function run() {
+  const issueNumber = parseInt(core.getInput('issue-number', { required: true }), 10)
   const apiKey = core.getInput('anthropic-api-key', { required: true })
   const token = core.getInput('github-token')
   const model = core.getInput('model') || 'claude-sonnet-4-6'
+  const ntfyTopic = core.getInput('ntfy-topic')
 
   const octokit = github.getOctokit(token)
-  const { context } = github
-  const issue = context.payload.issue
-  const { owner, repo } = context.repo
+  const { owner, repo } = github.context.repo
 
-  const labelNames = issue.labels.map((l) => l.name)
-  if (!labelNames.includes('user-feedback')) {
-    core.info('No user-feedback label — skipping')
+  core.info(`Starting apply-fix for issue #${issueNumber} in ${owner}/${repo}`)
+
+  const { data: issue } = await octokit.rest.issues.get({ owner, repo, issue_number: issueNumber })
+
+  const { data: comments } = await octokit.rest.issues.listComments({
+    owner,
+    repo,
+    issue_number: issueNumber,
+    per_page: 100,
+  })
+  const triageComment = comments.find((c) => c.body?.includes('### bugpilot triage'))
+
+  const prompt = buildPrompt(issue, triageComment)
+
+  core.info('Running Claude agentic loop for fix implementation...')
+  const client = new Anthropic.default({ apiKey })
+  const result = await runAgenticLoop(client, model, prompt)
+
+  if (!result) {
+    core.setFailed('Claude did not produce a fix result')
     return
   }
 
-  const structured = parseStructuredBlock(issue.body)
-  const issueUrl = `https://github.com/${owner}/${repo}/issues/${issue.number}`
-  core.info(`Triaging issue #${issue.number} (type: ${structured?.type ?? 'unknown'})`)
+  core.info(`Fix summary: ${result.summary}`)
 
-  // Feature requests don't need AI triage — just acknowledge and notify
-  if (structured?.type === 'feature' || labelNames.includes('enhancement')) {
+  execSync('git config user.name "github-actions[bot]"')
+  execSync('git config user.email "41898282+github-actions[bot]@users.noreply.github.com"')
+
+  // Authenticate git push via token
+  execSync(
+    `git remote set-url origin https://x-access-token:${token}@github.com/${owner}/${repo}.git`,
+    { stdio: 'pipe' },
+  )
+
+  const branchName = `fix/issue-${issueNumber}`
+
+  // Clean up any existing remote branch from a previous attempt
+  try {
+    execSync(`git push origin --delete ${branchName}`, { stdio: 'pipe' })
+    core.info(`Deleted existing remote branch ${branchName}`)
+  } catch {
+    // Branch didn't exist — that's fine
+  }
+
+  execSync(`git checkout -b ${branchName}`)
+
+  execSync('git add -A')
+
+  const stagedFiles = execSync('git diff --cached --name-only').toString().trim()
+  if (!stagedFiles) {
+    core.warning('Claude did not modify any files')
     await octokit.rest.issues.createComment({
       owner,
       repo,
-      issue_number: issue.number,
-      body: `### Feature request logged\n\nThanks for the suggestion — this has been added to the backlog for review. [View issue](${issueUrl})`,
+      issue_number: issueNumber,
+      body: [
+        '### bugpilot apply-fix',
+        '',
+        '**Status:** No files were modified.',
+        '',
+        result.summary,
+      ].join('\n'),
     })
-    const ntfyTopic = core.getInput('ntfy-topic')
-    if (ntfyTopic) {
-      await sendNtfyFeature({ ntfyTopic, issue, issueUrl })
-    }
     return
   }
 
-  const client = new Anthropic.default({ apiKey })
+  core.info(`Staged files:\n${stagedFiles}`)
+  execSync(
+    `git commit -m "fix(#${issueNumber}): ${result.summary.replace(/"/g, "'").slice(0, 72)}"`,
+  )
+  execSync(`git push origin ${branchName}`)
 
-  const message = await client.messages.create({
-    model,
-    max_tokens: 1024,
-    system: [
-      {
-        type: 'text',
-        text: SYSTEM_PROMPT,
-        cache_control: { type: 'ephemeral' },
-      },
-    ],
-    tools: [triageTool()],
-    tool_choice: { type: 'tool', name: 'triage_report' },
-    messages: [
-      {
-        role: 'user',
-        content: buildUserMessage(issue, structured),
-      },
-    ],
+  const { data: pr } = await octokit.rest.pulls.create({
+    owner,
+    repo,
+    title: `fix(#${issueNumber}): ${result.summary.slice(0, 72)}`,
+    head: branchName,
+    base: 'main',
+    body: [
+      `Fixes #${issueNumber}`,
+      '',
+      result.summary,
+      '',
+      '*Implemented by bugpilot + Claude*',
+    ].join('\n'),
   })
 
-  const toolUse = message.content.find((b) => b.type === 'tool_use')
-  if (!toolUse) {
-    core.setFailed('Claude did not call triage_report tool')
-    return
-  }
-
-  const triage = toolUse.input
-  core.info(`Triage result: ${JSON.stringify(triage)}`)
+  core.info(`PR opened: ${pr.html_url}`)
+  core.setOutput('pr-url', pr.html_url)
+  core.setOutput('branch', branchName)
 
   await octokit.rest.issues.createComment({
     owner,
     repo,
-    issue_number: issue.number,
-    body: buildComment(triage),
+    issue_number: issueNumber,
+    body: [
+      '### bugpilot apply-fix',
+      '',
+      `**Status:** Fix implemented — PR ready for review.`,
+      `**Branch:** \`${branchName}\``,
+      `**Files changed:** ${stagedFiles.split('\n').length}`,
+      '',
+      `**Summary:** ${result.summary}`,
+      '',
+      `[View PR →](${pr.html_url})`,
+    ].join('\n'),
   })
 
-  const newLabels = deriveLabels(triage)
-  if (newLabels.length) {
-    await ensureLabelsExist(octokit, owner, repo, newLabels)
-    await octokit.rest.issues.addLabels({
-      owner,
-      repo,
-      issue_number: issue.number,
-      labels: newLabels,
-    })
-  }
-
-  const ntfyTopic = core.getInput('ntfy-topic')
-  const webhookSecret = core.getInput('webhook-secret')
-  const workerBase = core.getInput('bugpilot-worker-url') || process.env.BUGPILOT_WORKER_URL
   if (ntfyTopic) {
-    await sendNtfy({ ntfyTopic, webhookSecret, workerBase, issue, issueUrl, triage, owner, repo })
+    await sendNtfy({ ntfyTopic, issue, pr })
   }
 }
 
-function triageTool() {
-  return {
-    name: 'triage_report',
-    description: 'Submit triage results for a user report',
-    input_schema: {
-      type: 'object',
-      required: ['classification', 'response_draft'],
-      properties: {
-        classification: {
-          type: 'string',
-          enum: ['bug', 'feature', 'not-feasible', 'spam', 'needs-info'],
-          description: 'Type of report',
-        },
-        severity: {
-          type: 'string',
-          enum: ['critical', 'high', 'medium', 'low'],
-          description: 'Bug severity only — omit for features',
-        },
-        reproducible: {
-          type: 'boolean',
-          description: 'Whether the bug appears reproducible from the report',
-        },
-        proposed_fix: {
-          type: 'string',
-          description: 'Concise description of what needs to change to fix the bug. Null for features.',
-        },
-        response_draft: {
-          type: 'string',
-          description: 'Friendly response to post to the reporter',
+async function runAgenticLoop(client, model, prompt) {
+  const messages = [{ role: 'user', content: prompt }]
+
+  for (let i = 0; i < MAX_ITERATIONS; i++) {
+    const response = await client.messages.create({
+      model,
+      max_tokens: 4096,
+      system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
+      tools: buildTools(),
+      messages,
+    })
+
+    core.info(`Iteration ${i + 1}: stop_reason=${response.stop_reason}`)
+
+    // report_done signals the end of the agentic loop
+    const doneCall = response.content.find(
+      (b) => b.type === 'tool_use' && b.name === 'report_done',
+    )
+    if (doneCall) {
+      // Still need to return the tool_result so the conversation is valid
+      messages.push({ role: 'assistant', content: response.content })
+      messages.push({
+        role: 'user',
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: doneCall.id,
+            content: 'Acknowledged.',
+          },
+        ],
+      })
+      return { summary: doneCall.input.summary }
+    }
+
+    if (response.stop_reason === 'end_turn') {
+      const text = response.content
+        .filter((b) => b.type === 'text')
+        .map((b) => b.text)
+        .join('\n')
+        .trim()
+      return { summary: text.slice(0, 300) || 'Fix implemented' }
+    }
+
+    const toolUses = response.content.filter((b) => b.type === 'tool_use')
+    if (!toolUses.length) {
+      const text = response.content
+        .filter((b) => b.type === 'text')
+        .map((b) => b.text)
+        .join('\n')
+        .trim()
+      return { summary: text.slice(0, 300) || 'Fix implemented' }
+    }
+
+    messages.push({ role: 'assistant', content: response.content })
+
+    const toolResults = []
+    for (const toolUse of toolUses) {
+      let result
+      try {
+        result = executeTool(toolUse.name, toolUse.input)
+        core.info(
+          `  ${toolUse.name}(${JSON.stringify(toolUse.input)}) → ${String(result).slice(0, 120)}`,
+        )
+      } catch (err) {
+        result = `Error: ${err.message}`
+        core.warning(`  ${toolUse.name} failed: ${err.message}`)
+      }
+      toolResults.push({
+        type: 'tool_result',
+        tool_use_id: toolUse.id,
+        content: String(result),
+      })
+    }
+
+    messages.push({ role: 'user', content: toolResults })
+  }
+
+  core.warning(`Reached max iterations (${MAX_ITERATIONS})`)
+  return { summary: 'Fix implemented (max iterations reached)' }
+}
+
+function executeTool(name, input) {
+  switch (name) {
+    case 'read_file': {
+      const abs = safePath(input.path)
+      if (!fs.existsSync(abs)) return `File not found: ${input.path}`
+      const content = fs.readFileSync(abs, 'utf8')
+      // Guard against enormous files filling context
+      if (content.length > 100_000) {
+        return content.slice(0, 100_000) + '\n\n[... file truncated at 100 000 chars ...]'
+      }
+      return content
+    }
+    case 'write_file': {
+      const abs = safePath(input.path)
+      fs.mkdirSync(path.dirname(abs), { recursive: true })
+      fs.writeFileSync(abs, input.content, 'utf8')
+      return `Written: ${input.path} (${input.content.length} chars)`
+    }
+    case 'list_files': {
+      const abs = safePath(input.path || '.')
+      if (!fs.existsSync(abs)) return `Directory not found: ${input.path}`
+      const stat = fs.statSync(abs)
+      if (!stat.isDirectory()) return `Not a directory: ${input.path}`
+      const SKIP = new Set(['node_modules', '.git', '.wrangler', 'dist', '.dev.vars'])
+      const entries = fs.readdirSync(abs, { withFileTypes: true })
+      return (
+        entries
+          .filter((e) => !SKIP.has(e.name))
+          .map((e) => `${e.isDirectory() ? '[dir] ' : '[file]'} ${e.name}`)
+          .join('\n') || '(empty)'
+      )
+    }
+    case 'report_done':
+      return `Acknowledged: ${input.summary}`
+    default:
+      return `Unknown tool: ${name}`
+  }
+}
+
+function safePath(filePath) {
+  const resolved = path.resolve(REPO_ROOT, filePath)
+  const boundary = REPO_ROOT + path.sep
+  if (resolved !== REPO_ROOT && !resolved.startsWith(boundary)) {
+    throw new Error(`Path traversal rejected: ${filePath}`)
+  }
+  return resolved
+}
+
+function buildTools() {
+  return [
+    {
+      name: 'read_file',
+      description: 'Read the full contents of a file. Use this before writing to understand existing code.',
+      input_schema: {
+        type: 'object',
+        required: ['path'],
+        properties: {
+          path: { type: 'string', description: 'Relative path from repo root, e.g. "src/widget.js"' },
         },
       },
     },
-  }
+    {
+      name: 'write_file',
+      description: 'Write (or overwrite) a file with new content. Always read_file first.',
+      input_schema: {
+        type: 'object',
+        required: ['path', 'content'],
+        properties: {
+          path: { type: 'string', description: 'Relative path from repo root' },
+          content: { type: 'string', description: 'Complete new file content' },
+        },
+      },
+    },
+    {
+      name: 'list_files',
+      description: 'List files and subdirectories at a given path. Use to explore the repo structure.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          path: {
+            type: 'string',
+            description: 'Relative path to list (defaults to repo root if omitted)',
+          },
+        },
+      },
+    },
+    {
+      name: 'report_done',
+      description:
+        'Call this when you have finished implementing the fix (or determined one is not possible). This ends the session.',
+      input_schema: {
+        type: 'object',
+        required: ['summary'],
+        properties: {
+          summary: {
+            type: 'string',
+            description:
+              'One or two sentences describing what was changed (or why no change was made)',
+          },
+        },
+      },
+    },
+  ]
 }
 
-function buildUserMessage(issue, structured) {
-  const structuredBlock = structured
-    ? `\n\nMachine-readable context:\n\`\`\`json\n${JSON.stringify(structured, null, 2)}\n\`\`\``
-    : ''
+function buildPrompt(issue, triageComment) {
+  const parts = [
+    `## Bug report — Issue #${issue.number}`,
+    '',
+    `**Title:** ${issue.title}`,
+    '',
+    '**Body:**',
+    issue.body || '(no body)',
+  ]
 
-  return `Issue #${issue.number}: ${issue.title}\n\n${issue.body}${structuredBlock}`
+  if (triageComment) {
+    parts.push('', '## Triage analysis', '', triageComment.body)
+  }
+
+  parts.push(
+    '',
+    '## Your task',
+    '',
+    'Implement the fix described above.',
+    'Start by exploring the repository with list_files, read the relevant files,',
+    'then make the targeted change and call report_done.',
+  )
+
+  return parts.join('\n')
 }
 
-function parseStructuredBlock(body) {
-  if (!body) return null
-  const match = body.match(/<!-- bugpilot:structured\n([\s\S]*?)\nbugpilot:end -->/)
-  if (!match) return null
-  try {
-    return JSON.parse(match[1])
-  } catch {
-    return null
-  }
-}
-
-function buildComment(triage) {
-  const lines = ['### bugpilot triage', '']
-
-  const classLabel = {
-    bug: 'Bug',
-    feature: 'Feature request',
-    'not-feasible': 'Not feasible',
-    spam: 'Spam',
-    'needs-info': 'Needs more information',
-  }[triage.classification] ?? triage.classification
-
-  lines.push(`**Classification:** ${classLabel}`)
-
-  if (triage.severity) {
-    lines.push(`**Severity:** ${triage.severity}`)
-  }
-  if (triage.reproducible !== undefined && triage.reproducible !== null) {
-    lines.push(`**Reproducible:** ${triage.reproducible ? 'Yes' : 'Unclear from report'}`)
-  }
-  if (triage.proposed_fix) {
-    lines.push('', `**Proposed fix:** ${triage.proposed_fix}`)
-  }
-  if (triage.response_draft) {
-    lines.push('', '**Draft response to reporter:**', '')
-    lines.push(`> ${triage.response_draft.replace(/\n/g, '\n> ')}`)
-  }
-
-  return lines.join('\n')
-}
-
-function deriveLabels(triage) {
-  const labels = []
-  const classMap = {
-    bug: 'triage:confirmed-bug',
-    feature: 'triage:feature-request',
-    'not-feasible': 'triage:not-feasible',
-    spam: 'triage:spam',
-    'needs-info': 'triage:needs-info',
-  }
-  if (classMap[triage.classification]) labels.push(classMap[triage.classification])
-  if (triage.severity) labels.push(`severity:${triage.severity}`)
-  return labels
-}
-
-async function sendNtfyFeature({ ntfyTopic, issue, issueUrl }) {
+async function sendNtfy({ ntfyTopic, issue, pr }) {
+  const topic = ntfyTopic.replace(/^https?:\/\/ntfy\.sh\//, '')
   const payload = {
-    topic: ntfyTopic.replace(/^https?:\/\/ntfy\.sh\//, ''),
-    title: 'Feature request submitted',
-    message: issue.title.replace(/^\[.*?\]\s*Feature:\s*/, '').slice(0, 120),
+    topic,
+    title: `Fix ready: #${issue.number}`,
+    message: `PR opened for "${issue.title.slice(0, 80)}". Ready to review and merge.`,
     actions: [
-      { action: 'view', label: '🔵 View request', url: issueUrl },
+      { action: 'view', label: '🔍 Review PR', url: pr.html_url },
+      { action: 'view', label: '📋 View issue', url: issue.html_url },
     ],
   }
   const res = await fetch('https://ntfy.sh', {
@@ -43021,81 +43175,7 @@ async function sendNtfyFeature({ ntfyTopic, issue, issueUrl }) {
   if (!res.ok) {
     core.warning(`NTFY notification failed: ${res.status} ${await res.text()}`)
   } else {
-    core.info('NTFY feature notification sent')
-  }
-}
-
-async function sendNtfy({ ntfyTopic, webhookSecret, workerBase, issue, issueUrl, triage, owner, repo }) {
-
-  const severityPart = triage.severity ? ` [${triage.severity}]` : ''
-  const title = `Bug${severityPart}: ${issue.title.replace(/^\[.*?\]\s*Bug:\s*/, '').slice(0, 80)}`
-  const message = triage.proposed_fix || 'Triage complete — no fix proposed.'
-
-  const actions = []
-
-  if (workerBase && webhookSecret) {
-    actions.push({
-      action: 'http',
-      label: '🟢 Approve',
-      url: `${workerBase}/webhook/apply-fix`,
-      method: 'POST',
-      headers: { 'x-webhook-secret': webhookSecret },
-      body: JSON.stringify({ issue_number: issue.number, owner, repo }),
-    })
-  } else {
-    // Stub until apply-fix Worker endpoint is deployed
-    actions.push({
-      action: 'view',
-      label: '🟢 Approve',
-      url: issueUrl,
-    })
-  }
-
-  actions.push({
-    action: 'view',
-    label: '🔴 Manual review',
-    url: issueUrl,
-  })
-
-  const payload = { topic: ntfyTopic.replace(/^https?:\/\/ntfy\.sh\//, ''), title, message, actions }
-
-  const res = await fetch('https://ntfy.sh', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-
-  if (!res.ok) {
-    core.warning(`NTFY notification failed: ${res.status} ${await res.text()}`)
-  } else {
-    core.info('NTFY notification sent')
-  }
-}
-
-async function ensureLabelsExist(octokit, owner, repo, labels) {
-  const colorMap = {
-    'triage:confirmed-bug': 'd73a4a',
-    'triage:feature-request': 'a2eeef',
-    'triage:not-feasible': 'e4e669',
-    'triage:spam': 'cfd3d7',
-    'triage:needs-info': 'd876e3',
-    'severity:critical': 'b60205',
-    'severity:high': 'e4e669',
-    'severity:medium': '0075ca',
-    'severity:low': 'cfd3d7',
-  }
-  for (const label of labels) {
-    try {
-      await octokit.rest.issues.getLabel({ owner, repo, name: label })
-    } catch (err) {
-      if (err.status !== 404) throw err
-      await octokit.rest.issues.createLabel({
-        owner,
-        repo,
-        name: label,
-        color: colorMap[label] ?? 'ededed',
-      })
-    }
+    core.info('NTFY follow-up notification sent')
   }
 }
 

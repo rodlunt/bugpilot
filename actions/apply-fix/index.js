@@ -313,7 +313,7 @@ function safePath(filePath) {
   }
   const resolved = path.resolve(REPO_ROOT, filePath)
   const boundary = REPO_ROOT + path.sep
-  if (resolved !== REPO_ROOT && !resolved.startsWith(boundary)) {
+  if (resolved === REPO_ROOT || !resolved.startsWith(boundary)) {
     throw new Error(`Path traversal rejected: ${filePath}`)
   }
   return resolved

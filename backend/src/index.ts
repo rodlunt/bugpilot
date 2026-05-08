@@ -128,29 +128,47 @@ async function handleApplyFix(
     return jsonError('Apply-fix webhook not configured on this worker', 503, corsHeaders)
   }
 
-  const secret = request.headers.get('x-webhook-secret')
-  if (secret !== env.WEBHOOK_SECRET) {
+  const secret = request.headers.get('x-webhook-secret') ?? ''
+  const expected = env.WEBHOOK_SECRET
+  const enc = new TextEncoder()
+  const secretBytes = enc.encode(secret.padEnd(expected.length))
+  const expectedBytes = enc.encode(expected.padEnd(secret.length))
+  const secretsMatch =
+    secret.length === expected.length &&
+    (await crypto.subtle.timingSafeEqual(secretBytes, expectedBytes))
+  if (!secretsMatch) {
     return jsonError('Unauthorized', 401, corsHeaders)
   }
 
-  let body: { issue_number: number; owner: string; repo: string }
+  let body: { issue_number: unknown; owner: unknown; repo: unknown }
   try {
     body = await request.json()
   } catch {
     return jsonError('Invalid JSON body', 400, corsHeaders)
   }
 
-  if (!body.issue_number || !body.owner || !body.repo) {
-    return jsonError('Missing required fields: issue_number, owner, repo', 400, corsHeaders)
+  if (
+    !Number.isInteger(body.issue_number) ||
+    (body.issue_number as number) <= 0 ||
+    typeof body.owner !== 'string' ||
+    typeof body.repo !== 'string' ||
+    !body.owner ||
+    !body.repo
+  ) {
+    return jsonError('Missing or invalid fields: issue_number (positive int), owner, repo', 400, corsHeaders)
   }
 
+  const issueNumber = body.issue_number as number
+  const owner = body.owner as string
+  const repo = body.repo as string
+
   const [configOwner, configRepo] = env.GITHUB_REPO.split('/')
-  if (body.owner !== configOwner || body.repo !== configRepo) {
+  if (owner !== configOwner || repo !== configRepo) {
     return jsonError('Repo mismatch', 403, corsHeaders)
   }
 
   const dispatchRes = await fetch(
-    `https://api.github.com/repos/${body.owner}/${body.repo}/actions/workflows/apply-fix.yml/dispatches`,
+    `https://api.github.com/repos/${owner}/${repo}/actions/workflows/apply-fix.yml/dispatches`,
     {
       method: 'POST',
       headers: {
@@ -162,7 +180,7 @@ async function handleApplyFix(
       },
       body: JSON.stringify({
         ref: 'main',
-        inputs: { issue_number: String(body.issue_number) },
+        inputs: { issue_number: String(issueNumber) },
       }),
     },
   )

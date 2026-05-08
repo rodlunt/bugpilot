@@ -1,67 +1,58 @@
 # Next session brief — 08/05/2026
 
-Branch: `main`
+**Branch:** main
 
 ## Commits this session
 
 ```
-605b567 feat(triage): always show approve/manual review buttons with emoji colours
-e75f7df feat: replace R2 with GitHub branch for screenshots; tighten NTFY messages
-4cc401a feat(triage): skip Claude for feature requests, post simple ack + NTFY view button
-257511e chore: ignore wrangler local state directory
-1985560 fix(triage): add contents:read permission for private repo checkout
-482c5a5 feat(triage): NTFY notification with Apply fix / Manual review buttons
-53ad55f feat(m2): triage action + two-path widget form (bug / feature)
-(+ this session-end housekeeping commit, about to land)
+1506476 docs: update README — M3 complete, apply-fix action docs, secrets table
+44bec98 fix(apply-fix): graceful PR fallback when Actions cannot create PRs
+1cba8c8 fix(apply-fix): stop resetting writes before staging them
+171a095 fix(apply-fix): shell injection + content validation + widget-only triage
+4951a70 feat(m3): apply-fix action + Worker webhook endpoint
 ```
 
-## What was built
+(+ this session-end housekeeping commit, about to land)
 
-**Widget (M1 complete):**
-- Two-path form: Bug/Usability (what happened, expected behaviour, steps, frequency, impact) and Feature/Feedback (ask, why, priority)
-- Type picker tabs at top of dialog; dialog title updates dynamically
-- Context chips fixed: now use DOM creation instead of innerHTML (XSS fix)
+## Files changed this session (uncommitted)
 
-**Cloudflare Worker (M1 complete):**
-- Issues structured by type (bug vs feature) with different body layouts
-- Screenshots committed to `bug-report-screenshots` branch (no R2 required) — same approach as BR360
-- `bug`/`enhancement` labels applied automatically based on report type
+- `actions/apply-fix/index.js` — safePath rejects REPO_ROOT itself (path traversal fix)
+- `actions/apply-fix/dist/index.js` — rebuilt with ncc after security fix
+- `backend/src/index.ts` — constant-time secret comparison (timingSafeEqual), integer validation for issue_number
+- `widget/test/index.html` — default endpoint changed to production Worker URL
+- `CLAUDE.md` — removed stale R2 references, removed resolved "NTFY not set up" open decision
 
-**Triage Action (M2 complete):**
-- Reusable GitHub Action at `actions/triage/` — consumers use `uses: rodlunt/bugpilot/actions/triage@v1`
-- Bug reports: Claude triage via tool use, comment posted, triage labels applied
-- Feature requests: simple acknowledgement comment only (no Claude call)
-- NTFY notifications: bug gets 🟢 Approve + 🔴 Manual review; feature gets 🔵 View request
-- Approve button is a stub (opens issue) until apply-fix workflow is built
+## M1, M2, M3: complete and verified end-to-end
+
+Full pipeline working as of this session:
+1. Widget submission creates structured GitHub issue
+2. Triage Action fires (only on widget-submitted issues with `<!-- bugpilot:structured` in body), sends NTFY
+3. NTFY Approve button calls Worker `/webhook/apply-fix`, triggers `apply-fix` workflow_dispatch
+4. Apply-fix Action: Claude agentic loop reads repo, implements fix, commits to `fix/issue-N` branch, opens PR
+5. NTFY "Fix ready" notification sent
+
+Security fixes applied and deployed to production this session:
+- `crypto.subtle.timingSafeEqual` for webhook secret comparison in Worker
+- `Number.isInteger && > 0` validation for issue_number in Worker
+- `safePath` now rejects paths that resolve exactly to REPO_ROOT (not just outside it)
 
 ## Verification
 
-- Widget build: VERIFIED clean
-- Worker TypeScript: VERIFIED clean
-- Triage action bundle: VERIFIED clean
-- End-to-end test: VERIFIED working (issues created, triage running, NTFY firing)
+- Tests: skipped — no test scripts configured. VERIFIED (no package.json test scripts)
+- Build: skipped — only test harness HTML changed, no widget source rebuild needed. VERIFIED
 
-## Issues closed this session
+## Open GitHub issues: 0
 
-Closed #1, #2, #3, #5, #6 (M1/M2 milestones: widget, screenshot, theming, triage, NTFY)
-Closed #8-18 (all Test Harness test submissions)
+No open issues. VERIFIED
 
-## Open issues (2 remaining)
+## Open PRs: 0
 
-- #4 — "Backend: Flask route..." title is stale (should be Cloudflare Worker). Low priority rename.
-- #7 — Apply-fix workflow: Claude implements fix, opens PR. **This is next.**
+No open PRs. VERIFIED
 
-## GitHub Issues drift
+## GitHub Issues baseline drift
 
-11 new labels in repo not in baseline (triage/severity labels created by the action, plus GitHub defaults). Harmless — baseline does not need updating unless you want to enforce label hygiene across projects.
+`.github/issue-baseline.json` is stale: 13 labels and 4 milestones now exist in the repo that are not in the baseline (added via triage action and milestones). Harmless unless running `/setup-issues` again. GUESSING: baseline was written during initial project setup and never updated.
 
-## Security notes
+## Suggested starting point
 
-- XSS in context chips (_populateContext) fixed this session: switched from innerHTML to DOM creation
-- ensureLabelsExist now re-throws non-404 errors instead of swallowing them
-- NTFY webhook secret is visible in NTFY app notification history (known trade-off with NTFY HTTP actions)
-- Worker endpoint accepts anonymous POSTs by design (per CLAUDE.md) — ALLOWED_ORIGIN is CORS-only, not a true auth gate
-
-## Suggested starting point (LIKELY)
-
-Build the apply-fix workflow (issue #7). Three parts: (1) `actions/apply-fix/` action that reads the issue and triage comment, calls Claude with read_file/write_file tools, commits a fix to a `fix/issue-N` branch, and opens a PR; (2) `.github/workflows/apply-fix.yml` triggered by `workflow_dispatch` with `issue_number` input; (3) `/webhook/apply-fix` endpoint in the Worker so the NTFY 🟢 Approve button triggers the dispatch. Once built, tag a `v1` release so the action is consumable by external repos.
+M4 portability: make triage and apply-fix usable as reusable actions from external repos. Tag a `v1` release on GitHub and verify the action.yml `inputs` work for external consumers using `uses: rodlunt/bugpilot/actions/triage@v1`. Also worth adding a minimal README to each `actions/` directory explaining how to wire the action up.

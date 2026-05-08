@@ -12,14 +12,14 @@ bugpilot is a drop-in feedback and bug-capture product. A user submits a bug rep
 widget/          Vanilla JS package — the embeddable widget (npm + CDN IIFE script tag)
 actions/triage/  GitHub Action — Claude triage on issues.opened
 actions/apply-fix/  GitHub Action — creates fix branch + PR via workflow_dispatch
-backend/         Cloudflare Worker — receives widget POST, uploads screenshot to R2, creates GitHub issue
+backend/         Cloudflare Worker — receives widget POST, commits screenshot to bug-report-screenshots branch, creates GitHub issue
 test/            Minimal plain-HTML test harness for local widget development
 ```
 
 ## Architecture: how the pieces connect
 
 1. **Widget** POSTs a structured payload (user description + auto-captured context + optional html2canvas screenshot as base64) to the configured `endpoint`.
-2. **Cloudflare Worker** (`backend/`) receives the POST, uploads the screenshot PNG to a bound R2 bucket (public `r2.dev` URL), then creates a GitHub issue with a structured body. GitHub token lives in Worker env vars, never exposed client-side.
+2. **Cloudflare Worker** (`backend/`) receives the POST, commits the screenshot PNG to the `bug-report-screenshots` branch via the GitHub Contents API, then creates a GitHub issue with a structured body. GitHub token lives in Worker env vars, never exposed client-side.
 3. **Triage Action** fires on `issues.opened` with the configured label. It parses the machine-readable JSON block in the issue body, calls Claude API, and expects structured JSON back (classification, severity, proposed_fix, response_draft). Posts a comment, applies triage labels, sends NTFY.
 4. **Apply-fix Action** is triggered by the NTFY "Apply fix" webhook via `workflow_dispatch`. Asks Claude to implement the fix, opens a PR, sends a follow-up NTFY.
 
@@ -27,7 +27,7 @@ test/            Minimal plain-HTML test harness for local widget development
 
 - **Widget must be vanilla JS.** No React, no Vue, no framework dependencies. It needs to drop into any host app with a single script tag.
 - **No auth on the widget endpoint.** The Worker accepts anonymous POSTs. The GitHub token is a Worker env var, never in the widget config.
-- **Screenshots go to R2, not inline.** GitHub strips `data:` URIs. `raw.githubusercontent.com` fails for private repos. R2 public bucket URL is the only approach that works universally.
+- **Screenshots go to the `bug-report-screenshots` branch, not inline.** GitHub strips `data:` URIs. Screenshots are committed via the GitHub Contents API to a dedicated branch and served as `raw.githubusercontent.com` URLs embedded in the issue body.
 
 ## Structured issue body format
 
@@ -48,7 +48,7 @@ The JSON block inside the HTML comment is what the Claude Action parses — keep
 | Project | {projectName} |
 
 ## Screenshot
-![Screenshot]({r2_url})
+![Screenshot]({github_raw_url})
 
 <!-- bugpilot:structured
 {"url":"...","viewport":{"w":...,"h":...},"userAgent":"...","timestamp":"...","projectName":"...","screenshotUrl":"..."}
@@ -82,11 +82,10 @@ npm run build   # produces dist/bugpilot.es.js (ESM) and dist/bugpilot.iife.js (
 **Worker** (`backend/`):
 ```bash
 npm install
-npx wrangler dev   # local dev with R2 binding simulation
+npx wrangler dev   # local dev server
 npx wrangler deploy
 ```
 
 ## Open decisions
 
-- **NTFY:** not set up yet. Sort when building M2 (triage Action).
 - **npm publish:** M5. For now the package is local/CDN only.

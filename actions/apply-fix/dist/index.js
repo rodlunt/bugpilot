@@ -47401,6 +47401,7 @@ async function run() {
   const token = core.getInput('github-token')
   const model = core.getInput('model') || 'claude-sonnet-4-6'
   const ntfyTopic = core.getInput('ntfy-topic')
+  const ntfyToken = core.getInput('ntfy-token')
 
   const octokit = github.getOctokit(token)
   const { owner, repo } = github.context.repo
@@ -47547,7 +47548,7 @@ async function run() {
   })
 
   if (ntfyTopic) {
-    await sendNtfy({ ntfyTopic, issue, prUrl: prUrl || compareUrl })
+    await sendNtfy({ ntfyTopic, ntfyToken, issue, prUrl: prUrl || compareUrl })
   }
 }
 
@@ -47773,8 +47774,15 @@ function buildPrompt(issue, triageComment) {
   return parts.join('\n')
 }
 
-async function sendNtfy({ ntfyTopic, issue, prUrl }) {
-  const topic = ntfyTopic.replace(/^https?:\/\/ntfy\.sh\//, '')
+function ntfyServerAndTopic(topicUrl) {
+  const u = new URL(topicUrl)
+  return { server: `${u.protocol}//${u.host}`, topic: u.pathname.replace(/^\//, '') }
+}
+
+async function sendNtfy({ ntfyTopic, ntfyToken, issue, prUrl }) {
+  const { server, topic } = ntfyServerAndTopic(ntfyTopic)
+  const headers = { 'Content-Type': 'application/json' }
+  if (ntfyToken) headers['Authorization'] = `Bearer ${ntfyToken}`
   const payload = {
     topic,
     title: `Fix ready: #${issue.number}`,
@@ -47784,9 +47792,9 @@ async function sendNtfy({ ntfyTopic, issue, prUrl }) {
       { action: 'view', label: '📋 View issue', url: issue.html_url },
     ],
   }
-  const res = await fetch('https://ntfy.sh', {
+  const res = await fetch(server, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(payload),
   })
   if (!res.ok) {

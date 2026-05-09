@@ -16,6 +16,9 @@ inputs:
   ntfy-topic:
     description: 'NTFY topic URL for follow-up notification. Leave empty to skip.'
     required: false
+  ntfy-token:
+    description: 'Bearer token for authenticated self-hosted NTFY server. Leave empty for public topics.'
+    required: false
 runs:
   using: 'node20'
   main: 'dist/index.js'

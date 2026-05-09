@@ -47417,8 +47417,9 @@ async function run() {
       body: `### Feature request logged\n\nThanks for the suggestion — this has been added to the backlog for review. [View issue](${issueUrl})`,
     })
     const ntfyTopic = core.getInput('ntfy-topic')
+    const ntfyToken = core.getInput('ntfy-token')
     if (ntfyTopic) {
-      await sendNtfyFeature({ ntfyTopic, issue, issueUrl })
+      await sendNtfyFeature({ ntfyTopic, ntfyToken, issue, issueUrl })
     }
     return
   }
@@ -47473,10 +47474,11 @@ async function run() {
   }
 
   const ntfyTopic = core.getInput('ntfy-topic')
+  const ntfyToken = core.getInput('ntfy-token')
   const webhookSecret = core.getInput('webhook-secret')
   const workerBase = core.getInput('bugpilot-worker-url') || process.env.BUGPILOT_WORKER_URL
   if (ntfyTopic) {
-    await sendNtfy({ ntfyTopic, webhookSecret, workerBase, issue, issueUrl, triage, owner, repo })
+    await sendNtfy({ ntfyTopic, ntfyToken, webhookSecret, workerBase, issue, issueUrl, triage, owner, repo })
   }
 }
 
@@ -47578,18 +47580,26 @@ function deriveLabels(triage) {
   return labels
 }
 
-async function sendNtfyFeature({ ntfyTopic, issue, issueUrl }) {
+function ntfyServerAndTopic(topicUrl) {
+  const u = new URL(topicUrl)
+  return { server: `${u.protocol}//${u.host}`, topic: u.pathname.replace(/^\//, '') }
+}
+
+async function sendNtfyFeature({ ntfyTopic, ntfyToken, issue, issueUrl }) {
+  const { server, topic } = ntfyServerAndTopic(ntfyTopic)
+  const headers = { 'Content-Type': 'application/json' }
+  if (ntfyToken) headers['Authorization'] = `Bearer ${ntfyToken}`
   const payload = {
-    topic: ntfyTopic.replace(/^https?:\/\/ntfy\.sh\//, ''),
+    topic,
     title: 'Feature request submitted',
     message: issue.title.replace(/^\[.*?\]\s*Feature:\s*/, '').slice(0, 120),
     actions: [
       { action: 'view', label: '🔵 View request', url: issueUrl },
     ],
   }
-  const res = await fetch('https://ntfy.sh', {
+  const res = await fetch(server, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(payload),
   })
   if (!res.ok) {
@@ -47599,7 +47609,7 @@ async function sendNtfyFeature({ ntfyTopic, issue, issueUrl }) {
   }
 }
 
-async function sendNtfy({ ntfyTopic, webhookSecret, workerBase, issue, issueUrl, triage, owner, repo }) {
+async function sendNtfy({ ntfyTopic, ntfyToken, webhookSecret, workerBase, issue, issueUrl, triage, owner, repo }) {
 
   const severityPart = triage.severity ? ` [${triage.severity}]` : ''
   const title = `Bug${severityPart}: ${issue.title.replace(/^\[.*?\]\s*Bug:\s*/, '').slice(0, 80)}`
@@ -47631,11 +47641,14 @@ async function sendNtfy({ ntfyTopic, webhookSecret, workerBase, issue, issueUrl,
     url: issueUrl,
   })
 
-  const payload = { topic: ntfyTopic.replace(/^https?:\/\/ntfy\.sh\//, ''), title, message, actions }
+  const { server, topic } = ntfyServerAndTopic(ntfyTopic)
+  const headers = { 'Content-Type': 'application/json' }
+  if (ntfyToken) headers['Authorization'] = `Bearer ${ntfyToken}`
+  const payload = { topic, title, message, actions }
 
-  const res = await fetch('https://ntfy.sh', {
+  const res = await fetch(server, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(payload),
   })
 

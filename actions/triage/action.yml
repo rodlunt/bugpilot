@@ -11,7 +11,10 @@ inputs:
     description: 'Claude model ID'
     default: 'claude-sonnet-4-6'
   ntfy-topic:
-    description: 'NTFY topic URL (e.g. https://ntfy.sh/your-topic). Leave empty to skip notifications.'
+    description: 'NTFY topic URL (e.g. https://ntfy.businessreview360.au/br360-bugs). Leave empty to skip notifications.'
+    required: false
+  ntfy-token:
+    description: 'Bearer token for authenticated self-hosted NTFY server. Leave empty for public topics.'
     required: false
   webhook-secret:
     description: 'Shared secret for the apply-fix Worker webhook endpoint'

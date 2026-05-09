@@ -17,3 +17,13 @@ compatibility_flags = ["nodejs_compat"]
 # Note: CORS headers only affect browser requests. Server-side or curl requests
 # bypass CORS regardless, so this is not a substitute for rate limiting.
 ALLOWED_ORIGIN = "*"
+
+# Business Review 360 deployment
+# Deploy: wrangler deploy --env br360
+# Secrets: wrangler secret put GITHUB_TOKEN --env br360
+#          wrangler secret put GITHUB_REPO --env br360
+#          wrangler secret put WEBHOOK_SECRET --env br360
+[env.br360]
+name = "bugpilot-br360"
+[env.br360.vars]
+ALLOWED_ORIGIN = "https://www.businessreview360.au"

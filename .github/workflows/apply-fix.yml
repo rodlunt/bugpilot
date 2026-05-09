@@ -24,3 +24,4 @@ jobs:
           issue-number: ${{ github.event.inputs.issue_number }}
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           ntfy-topic: ${{ secrets.NTFY_TOPIC }}
+          ntfy-token: ${{ secrets.NTFY_TOKEN }}

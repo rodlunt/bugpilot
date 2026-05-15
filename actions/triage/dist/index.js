@@ -47581,7 +47581,12 @@ function deriveLabels(triage) {
 }
 
 function ntfyServerAndTopic(topicUrl) {
-  const u = new URL(topicUrl)
+  let resolved = topicUrl
+  if (!resolved.includes('://')) {
+    const firstSegment = resolved.split('/')[0]
+    resolved = firstSegment.includes('.') ? `https://${resolved}` : `https://ntfy.sh/${resolved}`
+  }
+  const u = new URL(resolved)
   return { server: `${u.protocol}//${u.host}`, topic: u.pathname.replace(/^\//, '') }
 }
 

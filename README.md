@@ -84,7 +84,7 @@ Also required: **Settings → Actions → General → tick "Allow GitHub Actions
 | Secret | Purpose |
 |---|---|
 | `ANTHROPIC_API_KEY` | Claude API key for triage and apply-fix |
-| `NTFY_TOPIC` | Full NTFY topic URL (e.g. `https://ntfy.sh/your-topic`) |
+| `NTFY_TOPIC` | NTFY topic — accepts a plain slug (`my-topic`), a host/path (`ntfy.example.com/my-topic`), or a full URL (`https://ntfy.sh/my-topic`) |
 | `WEBHOOK_SECRET` | Shared secret for the Worker `/webhook/apply-fix` endpoint |
 | `BUGPILOT_WORKER_URL` | Deployed Worker base URL — wires the 🟢 Approve NTFY button |
 
@@ -95,6 +95,13 @@ Also required: **Settings → Actions → General → tick "Allow GitHub Actions
 | `GITHUB_TOKEN` | Creates issues, commits screenshots, dispatches workflows | Classic PAT: `repo` + `workflow`. Fine-grained: Contents (R/W), Issues (R/W), Actions (R/W) |
 | `GITHUB_REPO` | Target repo as `owner/repo` | — |
 | `WEBHOOK_SECRET` | Same value as the Actions secret above | — |
+
+**Worker env vars (set in `wrangler.toml` or via `wrangler secret put`):**
+
+| Var | Default | Purpose |
+|---|---|---|
+| `ALLOWED_ORIGIN` | `*` | CORS allowed origin(s). Accepts a single origin or a comma-separated list (e.g. `https://www.example.com,https://app.example.com`). |
+| `APPLY_FIX_WORKFLOW` | `apply-fix.yml` | Filename of the apply-fix workflow the Worker dispatches when 🟢 Approve is tapped. Change this if you name your workflow differently. |
 
 ## Licence
 

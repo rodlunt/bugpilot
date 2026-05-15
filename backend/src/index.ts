@@ -3,6 +3,7 @@ export interface Env {
   GITHUB_REPO: string
   ALLOWED_ORIGIN: string
   WEBHOOK_SECRET?: string
+  APPLY_FIX_WORKFLOW?: string
 }
 
 interface SubmissionPayload {
@@ -96,6 +97,8 @@ async function handleFeedback(
     ? ['user-feedback', 'enhancement']
     : ['user-feedback', 'bug']
 
+  await ensureLabelsExist(owner, repo, labels, env.GITHUB_TOKEN)
+
   const issueRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/issues`, {
     method: 'POST',
     headers: {
@@ -170,8 +173,9 @@ async function handleApplyFix(
     return jsonError('Repo mismatch', 403, corsHeaders)
   }
 
+  const workflowFile = env.APPLY_FIX_WORKFLOW || 'apply-fix.yml'
   const dispatchRes = await fetch(
-    `https://api.github.com/repos/${owner}/${repo}/actions/workflows/apply-fix.yml/dispatches`,
+    `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflowFile}/dispatches`,
     {
       method: 'POST',
       headers: {
@@ -198,6 +202,33 @@ async function handleApplyFix(
     status: 200,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
+}
+
+const LABEL_DEFAULTS: Record<string, { color: string; description: string }> = {
+  'user-feedback': { color: '0075ca', description: 'Submitted via bugpilot feedback widget' },
+  'bug':           { color: 'd73a4a', description: 'Something is not working' },
+  'enhancement':   { color: 'a2eeef', description: 'New feature or request' },
+}
+
+async function ensureLabelsExist(owner: string, repo: string, labels: string[], token: string): Promise<void> {
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+    'User-Agent': 'bugpilot-worker/0.1',
+    'Content-Type': 'application/json',
+  }
+  await Promise.all(labels.map(async (name) => {
+    const check = await fetch(`https://api.github.com/repos/${owner}/${repo}/labels/${encodeURIComponent(name)}`, { headers })
+    if (check.status === 404) {
+      const defaults = LABEL_DEFAULTS[name] ?? { color: 'ededed', description: '' }
+      await fetch(`https://api.github.com/repos/${owner}/${repo}/labels`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ name, ...defaults }),
+      })
+    }
+  }))
 }
 
 const SCREENSHOTS_BRANCH = 'bug-report-screenshots'

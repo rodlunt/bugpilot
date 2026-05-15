@@ -63,11 +63,13 @@
   background: rgba(0, 0, 0, 0.4);
   z-index: var(--bp-z-index);
   opacity: 0;
+  pointer-events: none;
   transition: opacity 0.2s;
 }
 
 .bp-backdrop.bp-visible {
   opacity: 1;
+  pointer-events: auto;
 }
 
 /* Dialog panel */

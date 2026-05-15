@@ -26,4 +26,4 @@ ALLOWED_ORIGIN = "*"
 [env.br360]
 name = "bugpilot-br360"
 [env.br360.vars]
-ALLOWED_ORIGIN = "https://www.businessreview360.au"
+ALLOWED_ORIGIN = "https://www.businessreview360.au,https://demo-corp.businessreview360.au"

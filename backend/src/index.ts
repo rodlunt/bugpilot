@@ -34,8 +34,11 @@ interface SubmissionPayload {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    const requestOrigin = request.headers.get('Origin') ?? ''
+    const allowed = env.ALLOWED_ORIGIN === '*' ? ['*'] : env.ALLOWED_ORIGIN.split(',').map(s => s.trim())
+    const corsOrigin = allowed.includes('*') ? '*' : (allowed.includes(requestOrigin) ? requestOrigin : allowed[0])
     const corsHeaders = {
-      'Access-Control-Allow-Origin': env.ALLOWED_ORIGIN === '*' ? '*' : env.ALLOWED_ORIGIN,
+      'Access-Control-Allow-Origin': corsOrigin,
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
     }

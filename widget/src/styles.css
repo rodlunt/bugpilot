@@ -34,7 +34,7 @@
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
+  box-shadow: 0 4px 14px var(--bp-primary-shadow, rgba(99, 102, 241, 0.4));
   transition: background 0.15s, transform 0.1s;
   user-select: none;
 }

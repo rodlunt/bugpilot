@@ -39,9 +39,19 @@ export class BugPilotWidget {
 
   _applyColor() {
     const color = this._cfg.color
-    if (!color) return
-    this._trigger.style.setProperty('--bp-primary', color)
-    this._dialog.style.setProperty('--bp-primary', color)
+    if (!color || !/^#[0-9a-fA-F]{6}$/.test(color)) return
+    const r = parseInt(color.slice(1, 3), 16)
+    const g = parseInt(color.slice(3, 5), 16)
+    const b = parseInt(color.slice(5, 7), 16)
+    // Hover: blend 15% towards white (lighten)
+    const hr = Math.min(255, Math.round(r + (255 - r) * 0.15))
+    const hg = Math.min(255, Math.round(g + (255 - g) * 0.15))
+    const hb = Math.min(255, Math.round(b + (255 - b) * 0.15))
+    for (const el of [this._trigger, this._dialog]) {
+      el.style.setProperty('--bp-primary', color)
+      el.style.setProperty('--bp-primary-hover', `rgb(${hr}, ${hg}, ${hb})`)
+      el.style.setProperty('--bp-primary-shadow', `rgba(${r}, ${g}, ${b}, 0.45)`)
+    }
   }
 
   _render() {

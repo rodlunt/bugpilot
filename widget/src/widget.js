@@ -25,6 +25,7 @@ export class BugPilotWidget {
     this._autoCloseTimer = null
     this._inject()
     this._render()
+    this._applyColor()
     this._bind()
   }
 
@@ -34,6 +35,13 @@ export class BugPilotWidget {
     style.id = 'bp-styles'
     style.textContent = cssText
     document.head.appendChild(style)
+  }
+
+  _applyColor() {
+    const color = this._cfg.color
+    if (!color) return
+    this._trigger.style.setProperty('--bp-primary', color)
+    this._dialog.style.setProperty('--bp-primary', color)
   }
 
   _render() {

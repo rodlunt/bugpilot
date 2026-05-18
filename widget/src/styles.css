@@ -2,7 +2,7 @@
    Host app overrides any --bp-* variable it cares about. */
 
 :root {
-  --bp-primary: #6366f1;
+  --bp-primary: #4f46e5;
   --bp-primary-hover: #4f46e5;
   --bp-surface: #ffffff;
   --bp-surface-raised: #f8fafc;
@@ -10,6 +10,7 @@
   --bp-text: #0f172a;
   --bp-text-muted: #64748b;
   --bp-error: #ef4444;
+  --bp-required: #dc2626;
   --bp-success: #22c55e;
   --bp-radius: 12px;
   --bp-radius-sm: 6px;
@@ -163,8 +164,8 @@
 }
 
 .bp-label span {
-  color: var(--bp-text-muted);
-  font-weight: 400;
+  color: var(--bp-required);
+  font-weight: 500;
 }
 
 .bp-select,

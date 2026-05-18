@@ -1,6 +1,6 @@
 {
   "name": "bugpilot-widget",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Drop-in feedback and bug-capture widget with AI-powered triage",
   "type": "module",
   "main": "./dist/bugpilot.umd.js",

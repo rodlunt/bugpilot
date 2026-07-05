@@ -1,0 +1,3 @@
+overrides:
+  # 2026-07-05 sweep: @actions toolkit pins undici 5.x/6.x lines
+  "undici@<6.27.0": ^6.27.0

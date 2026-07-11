@@ -78,6 +78,17 @@ async function handleFeedback(
     return jsonError('description is required', 400, corsHeaders)
   }
 
+  // The widget always sends context, but hand-rolled payloads (curl tests,
+  // third-party integrations) may omit it. Without this guard the body
+  // builders throw on ctx.url / ctx.viewport.w and the caller sees a generic
+  // Cloudflare 1101 that is indistinguishable from a bad GITHUB_TOKEN.
+  if (typeof body.context !== 'object' || body.context === null) {
+    return jsonError('context object is required (url, viewport, userAgent, browser, os, timestamp)', 400, corsHeaders)
+  }
+  if (typeof body.context.viewport !== 'object' || body.context.viewport === null) {
+    return jsonError('context.viewport is required ({w, h})', 400, corsHeaders)
+  }
+
   const [owner, repo] = env.GITHUB_REPO.split('/')
   if (!owner || !repo) {
     return jsonError('Worker misconfigured: GITHUB_REPO must be "owner/repo"', 500, corsHeaders)

@@ -89,3 +89,7 @@ npx wrangler deploy
 ## Open decisions
 
 - **npm publish:** M5. For now the package is local/CDN only.
+
+## Operational gotchas
+
+1. **`POST /feedback` requires the `context` object or the worker 500s with Cloudflare error 1101.** `buildBugBody` dereferences `body.context.url` and `body.context.viewport.w` with no guard, so a hand-rolled curl payload without `context: {url, viewport:{w,h}, userAgent, browser, os, timestamp}` throws an uncaught TypeError. The resulting generic 1101 response is indistinguishable from a dead `GITHUB_TOKEN`, which makes token rotation look broken when it is not (cost a full diagnostic detour on 11-Jul-2026). The real widget always sends `context`, so this only bites manual testing. Improvement candidate: validate `context` and return a clean 400. Token rotation itself is `wrangler secret put GITHUB_TOKEN --env br360` from `backend/` (pipe the value via stdin).

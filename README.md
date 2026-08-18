@@ -106,3 +106,7 @@ Also required: **Settings → Actions → General → tick "Allow GitHub Actions
 ## Licence
 
 [MIT](./LICENSE)
+
+---
+
+<sub>Built by [Rodney Lunt](https://rod.lunt.au). If this saved you some time, you can [buy me a coffee](https://buymeacoffee.com/rodlunt).</sub>

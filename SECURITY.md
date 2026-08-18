@@ -31,7 +31,7 @@ That opens a private advisory only the maintainer can see.
 Please include what you have: the affected component (widget, Worker, triage action or apply-fix
 action), the affected version or commit, the class of issue (for example, an injection via
 user-submitted report text reaching a GitHub issue body or an LLM prompt, a credential-handling
-problem in the Worker, or a supply-chain concern in a committed `dist/index.js`), and a
+problem in the Worker, or a supply-chain concern in a committed `dist/index.mjs`), and a
 reproduction if you have one.
 
 ## What to expect

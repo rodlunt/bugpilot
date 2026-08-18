@@ -1,6 +1,6 @@
-const core = require('@actions/core')
-const github = require('@actions/github')
-const Anthropic = require('@anthropic-ai/sdk')
+import * as core from '@actions/core'
+import * as github from '@actions/github'
+import Anthropic from '@anthropic-ai/sdk'
 
 const SYSTEM_PROMPT = `You are a senior engineer triaging user-submitted bug reports and feature requests.
 You will be given a structured report from bugpilot. Analyse it carefully and call the triage_report tool with your assessment.
@@ -53,7 +53,7 @@ async function run() {
     return
   }
 
-  const client = new Anthropic.default({ apiKey })
+  const client = new Anthropic({ apiKey })
 
   const message = await client.messages.create({
     model,

@@ -1,9 +1,9 @@
-const core = require('@actions/core')
-const github = require('@actions/github')
-const Anthropic = require('@anthropic-ai/sdk')
-const fs = require('fs')
-const path = require('path')
-const { execSync, execFileSync } = require('child_process')
+import * as core from '@actions/core'
+import * as github from '@actions/github'
+import Anthropic from '@anthropic-ai/sdk'
+import fs from 'fs'
+import path from 'path'
+import { execSync, execFileSync } from 'child_process'
 
 const REPO_ROOT = process.cwd()
 const MAX_ITERATIONS = 20
@@ -50,7 +50,7 @@ async function run() {
   const prompt = buildPrompt(issue, triageComment)
 
   core.info('Running Claude agentic loop for fix implementation...')
-  const client = new Anthropic.default({ apiKey })
+  const client = new Anthropic({ apiKey })
   const legitimateWrites = new Set()
   const result = await runAgenticLoop(client, model, prompt, legitimateWrites)
 

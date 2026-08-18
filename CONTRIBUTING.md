@@ -28,10 +28,10 @@ npx wrangler dev
 **Actions** (`actions/triage/`, `actions/apply-fix/`):
 ```bash
 npm install
-npm run build  # compiles index.js → dist/index.js via ncc
+npm run build  # compiles index.mjs → dist/index.mjs via ncc
 ```
 
-The action bundles (`dist/index.js`) are committed to the repo. Always rebuild and commit `dist/` after changing `index.js` in either action.
+The action bundles (`dist/index.mjs`) are committed to the repo. Always rebuild and commit `dist/` after changing `index.mjs` in either action.
 
 **To cut a release** (maintainers only):
 ```bash
@@ -43,7 +43,7 @@ This rebuilds the action bundles, commits if needed, tags, and pushes. The relea
 
 1. Fork the repo and create a branch from `main`.
 2. Make your change. For the widget, keep it vanilla JS — no framework dependencies.
-3. If you changed an action's `index.js`, run `npm run build` in that action's directory and commit the updated `dist/index.js`.
+3. If you changed an action's `index.mjs`, run `npm run build` in that action's directory and commit the updated `dist/index.mjs`.
 4. Open a PR against `main` with a clear description of what changed and why.
 
 ## Commit style
@@ -54,4 +54,4 @@ Conventional commits: `type(scope): description`. Types: `feat`, `fix`, `chore`,
 
 - **Widget must stay vanilla JS.** No React, Vue, or any framework. It needs to embed in any host app without dependency conflicts.
 - **No secrets in source.** GitHub token lives in Worker env vars only, never in widget config or committed files.
-- **Rebuild action bundles.** GitHub Actions runs `dist/index.js` directly — if you skip the build step your changes won't take effect.
+- **Rebuild action bundles.** GitHub Actions runs `dist/index.mjs` directly — if you skip the build step your changes won't take effect.

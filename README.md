@@ -2,11 +2,23 @@
 
 Drop-in feedback and bug-capture widget with structured issue creation, AI triage via Claude, and NTFY action notifications.
 
-![Trigger button](https://raw.githubusercontent.com/rodlunt/bugpilot/main/.github/assets/trigger.png)
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/screenshot-hero-dark.png">
+    <img src="docs/images/screenshot-hero-light.png" alt="The bugpilot feedback trigger docked bottom-right on a host app" width="85%">
+  </picture>
+</p>
 
-| Bug report | Feature request |
-|---|---|
-| ![Bug form](https://raw.githubusercontent.com/rodlunt/bugpilot/main/.github/assets/bug-form.png) | ![Feature form](https://raw.githubusercontent.com/rodlunt/bugpilot/main/.github/assets/feature-form.png) |
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/screenshot-bug-report-dark.png">
+    <img src="docs/images/screenshot-bug-report-light.png" alt="A filled-in bug report with a captured page screenshot attached" width="48%">
+  </picture>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/screenshot-feature-request-dark.png">
+    <img src="docs/images/screenshot-feature-request-light.png" alt="A filled-in feature request on the widget's second report path" width="48%">
+  </picture>
+</p>
 
 ## What it does
 

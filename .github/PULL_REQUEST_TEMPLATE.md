@@ -19,7 +19,7 @@ Closes #
       `cd widget && pnpm install && pnpm build`
       `cd backend && pnpm install && pnpm typecheck`
       (for an action: `cd actions/<name> && pnpm install && pnpm build`, and the
-      updated `dist/index.js` is committed)
+      updated `dist/index.mjs` is committed)
 - [ ] Widget changes stay vanilla JS, no framework dependencies
 - [ ] No secrets in source; the GitHub token stays in Worker env vars only
 - [ ] Commits follow conventional commits (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`)

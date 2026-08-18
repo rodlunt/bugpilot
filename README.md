@@ -43,6 +43,10 @@ npm run dev        # opens test harness at localhost:5173
 npm run build      # produces dist/bugpilot.es.js, .umd.js, .iife.js
 ```
 
+There is no automated widget test suite yet: verify a change by running `npm run dev` and
+exercising both report paths (bug and feature) in the test harness it opens. CI runs
+`pnpm build` on every push and PR as the automated gate; see `.github/workflows/ci.yml`.
+
 **Cloudflare Worker:**
 ```bash
 cd backend && npm install
@@ -52,6 +56,7 @@ cd backend && npm install
 #   ALLOWED_ORIGIN=http://localhost:5173
 npx wrangler dev   # local dev on localhost:8787
 npx wrangler deploy
+npm run typecheck  # tsc --noEmit; CI runs this on every push and PR
 ```
 
 **Triage Action (consumers):**

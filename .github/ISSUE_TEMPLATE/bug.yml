@@ -29,3 +29,13 @@ body:
     attributes:
       label: Environment
       placeholder: Browser, OS, widget version, any relevant config.
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance criteria
+      description: Two or three testable criteria that show the bug is fixed. "Finished typing" isn't done; the criteria passing is.
+      placeholder: |
+        1. Given …, when …, then …
+        2. …
+    validations:
+      required: true

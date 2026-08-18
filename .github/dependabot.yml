@@ -29,3 +29,23 @@ updates:
         update-types:
           - "minor"
           - "patch"
+
+  - package-ecosystem: "npm"
+    directory: "/actions/triage"
+    schedule:
+      interval: "weekly"
+    groups:
+      triage-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "npm"
+    directory: "/actions/apply-fix"
+    schedule:
+      interval: "weekly"
+    groups:
+      apply-fix-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"

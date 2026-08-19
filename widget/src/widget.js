@@ -51,6 +51,7 @@ export class BugPilotWidget {
       el.style.setProperty('--bp-primary', color)
       el.style.setProperty('--bp-primary-hover', `rgb(${hr}, ${hg}, ${hb})`)
       el.style.setProperty('--bp-primary-shadow', `rgba(${r}, ${g}, ${b}, 0.45)`)
+      el.style.setProperty('--bp-primary-soft', `rgba(${r}, ${g}, ${b}, 0.06)`)
     }
   }
 

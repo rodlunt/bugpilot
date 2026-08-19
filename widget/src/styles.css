@@ -1,14 +1,20 @@
 /* bugpilot widget — CSS custom property theming layer.
-   Host app overrides any --bp-* variable it cares about. */
+   Host app overrides any --bp-* variable it cares about.
+
+   The default palette is deliberately grayscale: brand colour belongs to the
+   host app, supplied via BugPilot.init({ color }) or by overriding --bp-primary
+   and friends. Error/success stay semantic (state feedback, not branding) and
+   are equally overridable. */
 
 :root {
-  --bp-primary: #4f46e5;
-  --bp-primary-hover: #4f46e5;
+  --bp-primary: #262626;
+  --bp-primary-hover: #404040;
+  --bp-primary-soft: rgba(0, 0, 0, 0.05);
   --bp-surface: #ffffff;
-  --bp-surface-raised: #f8fafc;
-  --bp-border: #e2e8f0;
-  --bp-text: #0f172a;
-  --bp-text-muted: #64748b;
+  --bp-surface-raised: #fafafa;
+  --bp-border: #e5e5e5;
+  --bp-text: #171717;
+  --bp-text-muted: #737373;
   --bp-error: #ef4444;
   --bp-required: #dc2626;
   --bp-success: #22c55e;
@@ -35,7 +41,7 @@
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  box-shadow: 0 4px 14px var(--bp-primary-shadow, rgba(99, 102, 241, 0.4));
+  box-shadow: 0 4px 14px var(--bp-primary-shadow, rgba(0, 0, 0, 0.25));
   transition: background 0.15s, transform 0.1s;
   user-select: none;
 }
@@ -232,7 +238,7 @@
 }
 
 .bp-btn-ghost:hover {
-  background: rgba(99, 102, 241, 0.06);
+  background: var(--bp-primary-soft);
 }
 
 .bp-btn-ghost:disabled {
@@ -312,7 +318,7 @@
 
 .bp-type-btn--active {
   color: var(--bp-primary);
-  background: rgba(99, 102, 241, 0.06);
+  background: var(--bp-primary-soft);
   border-color: var(--bp-primary);
 }
 

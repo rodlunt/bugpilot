@@ -37,7 +37,7 @@ Drop-in feedback and bug-capture widget with structured issue creation, AI triag
 ## Design goals
 
 - **Drop-in, minimal setup.** One script tag. One config object. Works.
-- **Theme-agnostic.** CSS custom properties inherit from the host app; the widget looks native.
+- **Theme-agnostic.** CSS custom properties inherit from the host app; the widget looks native. The default palette is grayscale, so colour only appears when the host supplies it (`BugPilot.init({ color })` or `--bp-*` overrides).
 - **BYO API key.** The Actions are reusable GitHub Actions — consumers supply their own `ANTHROPIC_API_KEY`.
 - **No external CDN required.** Screenshots are stored in a branch of your own repo.
 - **No laptop required.** The full pipeline from user report to merged fix can run without touching a laptop.

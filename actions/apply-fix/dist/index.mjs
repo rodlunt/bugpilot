@@ -51066,7 +51066,33 @@ function getOctokit(token, options, ...additionalPlugins) {
 //# sourceMappingURL=github.js.map
 // EXTERNAL MODULE: ./node_modules/.pnpm/@anthropic-ai+sdk@0.117.1/node_modules/@anthropic-ai/sdk/index.mjs + 84 modules
 var sdk = __nccwpck_require__(4221);
+;// CONCATENATED MODULE: ./lib.mjs
+// Pure helpers, extracted so they can be unit-tested: index.mjs executes
+// run() on import, which makes it untestable directly.
+
+
+
+function safePath(root, filePath) {
+  if (typeof filePath !== 'string') throw new Error(`Path must be a string, got ${typeof filePath}`)
+  // Reject suspicious characters that could corrupt git commands or filenames
+  if (/['";\r\n\0]/.test(filePath)) {
+    throw new Error(`Invalid characters in path: ${JSON.stringify(filePath)}`)
+  }
+  const resolved = external_path_namespaceObject.resolve(root, filePath)
+  const boundary = root + external_path_namespaceObject.sep
+  if (resolved === root || !resolved.startsWith(boundary)) {
+    throw new Error(`Path traversal rejected: ${filePath}`)
+  }
+  return resolved
+}
+
+function ntfyServerAndTopic(topicUrl) {
+  const u = new URL(topicUrl)
+  return { server: `${u.protocol}//${u.host}`, topic: u.pathname.replace(/^\//, '') }
+}
+
 ;// CONCATENATED MODULE: ./index.mjs
+
 
 
 
@@ -51334,7 +51360,7 @@ async function runAgenticLoop(client, model, prompt, legitimateWrites) {
 function executeTool(name, input, legitimateWrites) {
   switch (name) {
     case 'read_file': {
-      const abs = safePath(input.path)
+      const abs = safePath(REPO_ROOT, input.path)
       if (!external_fs_namespaceObject.existsSync(abs)) return `File not found: ${input.path}`
       const content = external_fs_namespaceObject.readFileSync(abs, 'utf8')
       // Guard against enormous files filling context
@@ -51347,7 +51373,7 @@ function executeTool(name, input, legitimateWrites) {
       if (input.content === undefined || input.content === null) {
         return 'Error: content parameter was missing (the model response may have been truncated). Please retry with the complete file content.'
       }
-      const abs = safePath(input.path)
+      const abs = safePath(REPO_ROOT, input.path)
       external_fs_namespaceObject.mkdirSync(external_path_namespaceObject.dirname(abs), { recursive: true })
       external_fs_namespaceObject.writeFileSync(abs, input.content, 'utf8')
       const relPath = external_path_namespaceObject.relative(REPO_ROOT, abs)
@@ -51355,7 +51381,7 @@ function executeTool(name, input, legitimateWrites) {
       return `Written: ${relPath} (${input.content.length} chars)`
     }
     case 'list_files': {
-      const abs = safePath(input.path || '.')
+      const abs = safePath(REPO_ROOT, input.path || '.')
       if (!external_fs_namespaceObject.existsSync(abs)) return `Directory not found: ${input.path}`
       const stat = external_fs_namespaceObject.statSync(abs)
       if (!stat.isDirectory()) return `Not a directory: ${input.path}`
@@ -51375,19 +51401,6 @@ function executeTool(name, input, legitimateWrites) {
   }
 }
 
-function safePath(filePath) {
-  if (typeof filePath !== 'string') throw new Error(`Path must be a string, got ${typeof filePath}`)
-  // Reject suspicious characters that could corrupt git commands or filenames
-  if (/['";\r\n\0]/.test(filePath)) {
-    throw new Error(`Invalid characters in path: ${JSON.stringify(filePath)}`)
-  }
-  const resolved = external_path_namespaceObject.resolve(REPO_ROOT, filePath)
-  const boundary = REPO_ROOT + external_path_namespaceObject.sep
-  if (resolved === REPO_ROOT || !resolved.startsWith(boundary)) {
-    throw new Error(`Path traversal rejected: ${filePath}`)
-  }
-  return resolved
-}
 
 function buildTools() {
   return [
@@ -51472,10 +51485,6 @@ function buildPrompt(issue, triageComment) {
   return parts.join('\n')
 }
 
-function ntfyServerAndTopic(topicUrl) {
-  const u = new URL(topicUrl)
-  return { server: `${u.protocol}//${u.host}`, topic: u.pathname.replace(/^\//, '') }
-}
 
 async function sendNtfy({ ntfyTopic, ntfyToken, issue, prUrl }) {
   const { server, topic } = ntfyServerAndTopic(ntfyTopic)

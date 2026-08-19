@@ -4,6 +4,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import fs from 'fs'
 import path from 'path'
 import { execSync, execFileSync } from 'child_process'
+import { safePath, ntfyServerAndTopic } from './lib.mjs'
 
 const REPO_ROOT = process.cwd()
 const MAX_ITERATIONS = 20
@@ -265,7 +266,7 @@ async function runAgenticLoop(client, model, prompt, legitimateWrites) {
 function executeTool(name, input, legitimateWrites) {
   switch (name) {
     case 'read_file': {
-      const abs = safePath(input.path)
+      const abs = safePath(REPO_ROOT, input.path)
       if (!fs.existsSync(abs)) return `File not found: ${input.path}`
       const content = fs.readFileSync(abs, 'utf8')
       // Guard against enormous files filling context
@@ -278,7 +279,7 @@ function executeTool(name, input, legitimateWrites) {
       if (input.content === undefined || input.content === null) {
         return 'Error: content parameter was missing (the model response may have been truncated). Please retry with the complete file content.'
       }
-      const abs = safePath(input.path)
+      const abs = safePath(REPO_ROOT, input.path)
       fs.mkdirSync(path.dirname(abs), { recursive: true })
       fs.writeFileSync(abs, input.content, 'utf8')
       const relPath = path.relative(REPO_ROOT, abs)
@@ -286,7 +287,7 @@ function executeTool(name, input, legitimateWrites) {
       return `Written: ${relPath} (${input.content.length} chars)`
     }
     case 'list_files': {
-      const abs = safePath(input.path || '.')
+      const abs = safePath(REPO_ROOT, input.path || '.')
       if (!fs.existsSync(abs)) return `Directory not found: ${input.path}`
       const stat = fs.statSync(abs)
       if (!stat.isDirectory()) return `Not a directory: ${input.path}`
@@ -306,19 +307,6 @@ function executeTool(name, input, legitimateWrites) {
   }
 }
 
-function safePath(filePath) {
-  if (typeof filePath !== 'string') throw new Error(`Path must be a string, got ${typeof filePath}`)
-  // Reject suspicious characters that could corrupt git commands or filenames
-  if (/['";\r\n\0]/.test(filePath)) {
-    throw new Error(`Invalid characters in path: ${JSON.stringify(filePath)}`)
-  }
-  const resolved = path.resolve(REPO_ROOT, filePath)
-  const boundary = REPO_ROOT + path.sep
-  if (resolved === REPO_ROOT || !resolved.startsWith(boundary)) {
-    throw new Error(`Path traversal rejected: ${filePath}`)
-  }
-  return resolved
-}
 
 function buildTools() {
   return [
@@ -403,10 +391,6 @@ function buildPrompt(issue, triageComment) {
   return parts.join('\n')
 }
 
-function ntfyServerAndTopic(topicUrl) {
-  const u = new URL(topicUrl)
-  return { server: `${u.protocol}//${u.host}`, topic: u.pathname.replace(/^\//, '') }
-}
 
 async function sendNtfy({ ntfyTopic, ntfyToken, issue, prUrl }) {
   const { server, topic } = ntfyServerAndTopic(ntfyTopic)

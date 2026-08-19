@@ -14,7 +14,7 @@ export interface Env {
 // hostile payload from blowing GitHub's 65k issue-body limit into a 502.
 // Context is a loose object because the widget sends extras (screen size)
 // that the worker does not consume.
-const contextSchema = z.looseObject({
+export const contextSchema = z.looseObject({
   url: z.string().max(2000),
   viewport: z.object({ w: z.number(), h: z.number() }),
   userAgent: z.string().max(1000),
@@ -26,7 +26,7 @@ const contextSchema = z.looseObject({
   referrer: z.string().max(2000).nullish(),
 })
 
-const submissionSchema = z.object({
+export const submissionSchema = z.object({
   type: z.enum(['bug', 'feature']).optional(),
   description: z.string().trim().min(1, 'description is required').max(10000),
   screenshot: z.string().nullish(),
@@ -348,14 +348,14 @@ async function ensureScreenshotsBranch(owner: string, repo: string, headers: Rec
   })
 }
 
-function buildTitle(body: SubmissionPayload): string {
+export function buildTitle(body: SubmissionPayload): string {
   const prefix = body.projectName ? `[${body.projectName}] ` : ''
   const typeLabel = body.type === 'feature' ? 'Feature: ' : 'Bug: '
   const desc = body.description.slice(0, 72)
   return `${prefix}${typeLabel}${desc}${body.description.length > 72 ? '…' : ''}`
 }
 
-function buildIssueBody(body: SubmissionPayload, screenshotUrl: string | null): string {
+export function buildIssueBody(body: SubmissionPayload, screenshotUrl: string | null): string {
   return body.type === 'feature'
     ? buildFeatureBody(body, screenshotUrl)
     : buildBugBody(body, screenshotUrl)
@@ -500,7 +500,7 @@ function formatPriority(v: string | null | undefined): string {
   return map[v ?? ''] ?? '—'
 }
 
-function neutraliseMarkers(v: string | null | undefined): string | null {
+export function neutraliseMarkers(v: string | null | undefined): string | null {
   if (v == null) return null
   // The zero-width space (U+200B) stops '-->' in user text from closing the
   // HTML comment that carries the structured block, without visibly altering

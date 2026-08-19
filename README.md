@@ -22,6 +22,28 @@ Drop-in feedback and bug-capture widget with structured issue creation, AI triag
 
 <p align="center"><sub>One widget, three host themes: the accent colour in each shot comes from the host app (<code>BugPilot.init({ color })</code> or <code>--bp-*</code> overrides). Out of the box the widget is grayscale until your app supplies a colour.</sub></p>
 
+## What lands in GitHub
+
+Every submission becomes a structured issue: the report fields, an environment table, a machine-readable context block, and the captured screenshot, committed to a `bug-report-screenshots` branch in your repo and embedded in the body. Labels are applied on creation.
+
+<p align="center">
+  <a href="https://raw.githubusercontent.com/rodlunt/bugpilot/main/docs/images/screenshot-github-issue-light.png"><picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/screenshot-github-issue-dark.png">
+    <img src="docs/images/screenshot-github-issue-light.png" alt="The structured GitHub issue a widget submission creates, with environment table and embedded screenshot" width="85%">
+  </picture></a>
+</p>
+
+Moments later the triage action has classified it, assessed severity, applied labels, and drafted a reply for the reporter:
+
+<p align="center">
+  <a href="https://raw.githubusercontent.com/rodlunt/bugpilot/main/docs/images/screenshot-github-triage-light.png"><picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/screenshot-github-triage-dark.png">
+    <img src="docs/images/screenshot-github-triage-light.png" alt="Claude's triage comment: classification, severity, proposed fix and a drafted response, with triage labels applied" width="85%">
+  </picture></a>
+</p>
+
+<p align="center"><sub>A real report, submitted through the widget and triaged end to end: <a href="https://github.com/rodlunt/bugpilot/issues/79">see the live issue</a>.</sub></p>
+
 ## What it does
 
 1. **Capture** — a lightweight widget embeds in any web app. Users submit a bug report or feature request; the widget auto-collects viewport, browser, OS, and URL context plus an optional screenshot.

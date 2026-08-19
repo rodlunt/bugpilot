@@ -83,7 +83,29 @@ SHOTS = [
     ("screenshot-feature-request.png", "screenshot-feature-request"),
 ]
 
+# Shots whose CONTENT differs by theme (GitHub pages captured in light and
+# dark): each theme's raw gets the matching canvas, from
+# <stem>-light-raw.png / <stem>-dark-raw.png.
+THEMED_SHOTS = [
+    "screenshot-github-issue",
+    "screenshot-github-triage",
+]
+
 for src_name, stem in SHOTS:
     src = DOCS / src_name
+    if not src.exists():
+        print(f"skip {stem}: no raw {src_name}")
+        continue
     frame(src, DOCS / f"{stem}-light.png", CANVAS_LIGHT, BORDER_LIGHT)
     frame(src, DOCS / f"{stem}-dark.png", CANVAS_DARK, BORDER_DARK)
+
+for stem in THEMED_SHOTS:
+    for theme, canvas, border in (
+        ("light", CANVAS_LIGHT, BORDER_LIGHT),
+        ("dark", CANVAS_DARK, BORDER_DARK),
+    ):
+        src = DOCS / f"{stem}-{theme}-raw.png"
+        if not src.exists():
+            print(f"skip {stem}-{theme}: no raw")
+            continue
+        frame(src, DOCS / f"{stem}-{theme}.png", canvas, border)

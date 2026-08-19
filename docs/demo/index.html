@@ -11,10 +11,24 @@
     Usage:
       1. cd widget && pnpm build          (the page loads the built IIFE)
       2. serve the repo root, e.g.:  python3 -m http.server 8790
-      3. open http://localhost:8790/docs/demo/?brand=%236366f1
+      3. capture through a /reports/ symlink so the widget's URL-path context
+         chip reads like a real app instead of /docs/demo/:
+           ln -s docs/demo reports
+      4. open http://localhost:8790/reports/?brand=%236366f1
          The brand query drives BOTH the fake app's accent and the widget's
          config.color, demonstrating that the widget takes its colour from
          the host. Omit ?brand to see the widget's grayscale default.
+
+    Screenshot states (?state=) pre-stage the exact captures the README uses,
+    so no browser scripting is needed:
+      ?state=bug      opens the bug form, filled, and captures the screenshot
+      ?state=feature  opens the feature form, filled
+    Headless capture, one command per shot (then rm the symlink and run
+    docs/frame_screenshots.py):
+      google-chrome --headless=new --window-size=1488,960 \
+        --force-device-scale-factor=2 --hide-scrollbars \
+        --virtual-time-budget=8000 --screenshot=docs/images/screenshot-hero.png \
+        'http://localhost:8790/reports/?brand=%236366f1'
   -->
   <style>
     :root { --brand: #6366f1; }
@@ -88,7 +102,8 @@
 
   <script src="../../widget/dist/bugpilot.iife.js"></script>
   <script>
-    const brand = new URLSearchParams(location.search).get('brand')
+    const params = new URLSearchParams(location.search)
+    const brand = params.get('brand')
     if (brand) document.documentElement.style.setProperty('--brand', brand)
     BugPilot.init({
       endpoint: 'http://localhost:8787/feedback',
@@ -96,6 +111,31 @@
       position: 'bottom-right',
       ...(brand ? { color: brand } : {}),
     })
+
+    // Screenshot states: pre-stage the README captures (see header comment).
+    const state = params.get('state')
+    if (state === 'bug' || state === 'feature') {
+      const fill = (sel, val) => {
+        const el = document.querySelector(sel)
+        el.value = val
+        el.dispatchEvent(new Event('input', { bubbles: true }))
+      }
+      BugPilot.open()
+      if (state === 'bug') {
+        document.querySelector('#bp-bug-category').value = 'Functionality bug'
+        fill('#bp-what-happened', 'Clicking Export on the reports page does nothing. No download starts and no error appears in the console.')
+        fill('#bp-expected', "The report should download as a CSV file, same as it did before last week's deploy.")
+        fill('#bp-steps', '1. Go to Reports\n2. Filter by last 30 days\n3. Click Export\n4. Nothing happens')
+        document.querySelector('#bp-capture-btn').click()
+        setTimeout(() => document.activeElement?.blur(), 2500)
+      } else {
+        document.querySelector('[data-type="feature"]').click()
+        fill('#bp-feature-ask', 'Let me schedule a report to email itself to the team every Monday morning, instead of exporting it by hand each week.')
+        fill('#bp-feature-why', 'Our ops stand-up runs off the signups report; whoever remembers exports it and pastes it into Slack.')
+        document.querySelector('#bp-feature-priority').value = 'high'
+        setTimeout(() => document.activeElement?.blur(), 300)
+      }
+    }
   </script>
 </body>
 </html>

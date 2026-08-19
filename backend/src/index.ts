@@ -278,11 +278,16 @@ async function ensureLabelsExist(owner: string, repo: string, labels: string[], 
     const check = await fetch(`https://api.github.com/repos/${owner}/${repo}/labels/${encodeURIComponent(name)}`, { headers })
     if (check.status === 404) {
       const defaults = LABEL_DEFAULTS[name] ?? { color: 'ededed', description: '' }
-      await fetch(`https://api.github.com/repos/${owner}/${repo}/labels`, {
+      const create = await fetch(`https://api.github.com/repos/${owner}/${repo}/labels`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ name, ...defaults }),
       })
+      if (!create.ok) {
+        console.error('[bugpilot] label creation failed', name, create.status, await create.text())
+      }
+    } else if (!check.ok) {
+      console.error('[bugpilot] label check failed', name, check.status, await check.text())
     }
   }))
 }

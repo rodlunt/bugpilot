@@ -20,6 +20,8 @@ Drop-in feedback and bug-capture widget with structured issue creation, AI triag
   </picture>
 </p>
 
+<p align="center"><sub>One widget, three host themes: the accent colour in each shot comes from the host app (<code>BugPilot.init({ color })</code> or <code>--bp-*</code> overrides). Out of the box the widget is grayscale until your app supplies a colour.</sub></p>
+
 ## What it does
 
 1. **Capture** — a lightweight widget embeds in any web app. Users submit a bug report or feature request; the widget auto-collects viewport, browser, OS, and URL context plus an optional screenshot.

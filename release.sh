@@ -8,8 +8,8 @@ if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 fi
 
 echo "Rebuilding action bundles..."
-(cd actions/triage && npm run build --silent)
-(cd actions/apply-fix && npm run build --silent)
+(cd actions/triage && pnpm run --silent build)
+(cd actions/apply-fix && pnpm run --silent build)
 
 git add actions/triage/dist actions/apply-fix/dist
 git diff --cached --quiet || git commit -m "chore: rebuild action bundles for $VERSION"

@@ -1,3 +1,5 @@
+import { z } from 'zod'
+
 export interface Env {
   GITHUB_TOKEN: string
   GITHUB_REPO: string
@@ -6,35 +8,58 @@ export interface Env {
   APPLY_FIX_WORKFLOW?: string
 }
 
-interface SubmissionPayload {
-  type?: 'bug' | 'feature'
-  description: string
-  screenshot?: string | null
-  projectName?: string
-  context: {
-    url: string
-    viewport: { w: number; h: number }
-    userAgent: string
-    browser: string
-    os: string
-    timestamp: string
-    timezone?: string
-    language?: string
-    referrer?: string | null
-  }
-  // Bug-specific
-  bugCategory?: string | null
-  expectedBehavior?: string | null
-  stepsToReproduce?: string | null
-  frequency?: string | null
-  impact?: string | null
-  // Feature-specific
-  problemStatement?: string | null
-  priority?: string | null
-}
+// Runtime schema for the /feedback payload. Presence-only guards proved
+// insufficient: a non-string description reached .trim() and crashed as a
+// Cloudflare 1101 (see CLAUDE.md operational gotcha 1). Length caps keep a
+// hostile payload from blowing GitHub's 65k issue-body limit into a 502.
+// Context is a loose object because the widget sends extras (screen size)
+// that the worker does not consume.
+const contextSchema = z.looseObject({
+  url: z.string().max(2000),
+  viewport: z.object({ w: z.number(), h: z.number() }),
+  userAgent: z.string().max(1000),
+  browser: z.string().max(100),
+  os: z.string().max(100),
+  timestamp: z.string().max(100),
+  timezone: z.string().max(100).nullish(),
+  language: z.string().max(50).nullish(),
+  referrer: z.string().max(2000).nullish(),
+})
+
+const submissionSchema = z.object({
+  type: z.enum(['bug', 'feature']).optional(),
+  description: z.string().trim().min(1, 'description is required').max(10000),
+  screenshot: z.string().nullish(),
+  projectName: z.string().max(200).nullish(),
+  context: contextSchema,
+  bugCategory: z.string().max(100).nullish(),
+  expectedBehavior: z.string().max(10000).nullish(),
+  stepsToReproduce: z.string().max(10000).nullish(),
+  frequency: z.string().max(50).nullish(),
+  impact: z.string().max(50).nullish(),
+  problemStatement: z.string().max(10000).nullish(),
+  priority: z.string().max(50).nullish(),
+})
+
+type SubmissionPayload = z.infer<typeof submissionSchema>
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    // Fail fast on missing configuration with a nameable error. Without this,
+    // .split on an undefined env var throws on every request and surfaces as
+    // an undiagnosable Cloudflare 1101 (CLAUDE.md operational gotcha 1).
+    const fallbackCors = {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    }
+    for (const name of ['ALLOWED_ORIGIN', 'GITHUB_REPO', 'GITHUB_TOKEN'] as const) {
+      if (!env[name]) {
+        console.error(`[bugpilot] worker misconfigured: ${name} is not set`)
+        return jsonError(`Worker misconfigured: ${name} is not set`, 500, fallbackCors)
+      }
+    }
+
     const requestOrigin = request.headers.get('Origin') ?? ''
     const allowed = env.ALLOWED_ORIGIN === '*' ? ['*'] : env.ALLOWED_ORIGIN.split(',').map(s => s.trim())
     const corsOrigin = allowed.includes('*') ? '*' : (allowed.includes(requestOrigin) ? requestOrigin : allowed[0])
@@ -48,17 +73,25 @@ export default {
       return new Response(null, { status: 204, headers: corsHeaders })
     }
 
-    const url = new URL(request.url)
+    // Top-level error boundary: an uncaught throw here becomes a Cloudflare
+    // 1101, which is indistinguishable from a dead GITHUB_TOKEN from outside.
+    // Every unexpected failure must leave as logged, sanitised JSON instead.
+    try {
+      const url = new URL(request.url)
 
-    if (request.method === 'POST' && url.pathname === '/feedback') {
-      return handleFeedback(request, env, corsHeaders)
+      if (request.method === 'POST' && url.pathname === '/feedback') {
+        return await handleFeedback(request, env, corsHeaders)
+      }
+
+      if (request.method === 'POST' && url.pathname === '/webhook/apply-fix') {
+        return await handleApplyFix(request, env, corsHeaders)
+      }
+
+      return new Response('Not found', { status: 404, headers: corsHeaders })
+    } catch (err) {
+      console.error('[bugpilot] unhandled error', err)
+      return jsonError('Internal error', 500, corsHeaders)
     }
-
-    if (request.method === 'POST' && url.pathname === '/webhook/apply-fix') {
-      return handleApplyFix(request, env, corsHeaders)
-    }
-
-    return new Response('Not found', { status: 404, headers: corsHeaders })
   },
 }
 
@@ -67,26 +100,35 @@ async function handleFeedback(
   env: Env,
   corsHeaders: Record<string, string>,
 ): Promise<Response> {
-  let body: SubmissionPayload
+  let raw: unknown
   try {
-    body = await request.json()
+    raw = await request.json()
   } catch {
     return jsonError('Invalid JSON body', 400, corsHeaders)
   }
 
-  if (!body.description?.trim()) {
-    return jsonError('description is required', 400, corsHeaders)
+  // One schema validates the whole payload: types, presence and length caps.
+  // Hand-rolled payloads (curl tests, third-party integrations) get a 400
+  // naming every violating field instead of a generic Cloudflare 1101.
+  const parsed = submissionSchema.safeParse(raw)
+  if (!parsed.success) {
+    const detail = parsed.error.issues
+      .map((i) => `${i.path.join('.') || 'payload'}: ${i.message}`)
+      .join('; ')
+    console.warn(`[bugpilot] /feedback validation failed (${request.headers.get('CF-Connecting-IP') ?? 'unknown ip'}): ${detail}`)
+    return jsonError(`Invalid payload: ${detail}`, 400, corsHeaders)
   }
-
-  // The widget always sends context, but hand-rolled payloads (curl tests,
-  // third-party integrations) may omit it. Without this guard the body
-  // builders throw on ctx.url / ctx.viewport.w and the caller sees a generic
-  // Cloudflare 1101 that is indistinguishable from a bad GITHUB_TOKEN.
-  if (typeof body.context !== 'object' || body.context === null) {
-    return jsonError('context object is required (url, viewport, userAgent, browser, os, timestamp)', 400, corsHeaders)
-  }
-  if (typeof body.context.viewport !== 'object' || body.context.viewport === null) {
-    return jsonError('context.viewport is required ({w, h})', 400, corsHeaders)
+  // Neutralise the structured-block markers in user text so a submitter
+  // cannot counterfeit the machine-readable block the triage action parses,
+  // or break out of the HTML comment that carries the genuine one.
+  const body: SubmissionPayload = {
+    ...parsed.data,
+    description: neutraliseMarkers(parsed.data.description) ?? '',
+    projectName: neutraliseMarkers(parsed.data.projectName),
+    bugCategory: neutraliseMarkers(parsed.data.bugCategory),
+    expectedBehavior: neutraliseMarkers(parsed.data.expectedBehavior),
+    stepsToReproduce: neutraliseMarkers(parsed.data.stepsToReproduce),
+    problemStatement: neutraliseMarkers(parsed.data.problemStatement),
   }
 
   const [owner, repo] = env.GITHUB_REPO.split('/')
@@ -154,6 +196,9 @@ async function handleApplyFix(
     secret.length === expected.length &&
     (await crypto.subtle.timingSafeEqual(secretBytes, expectedBytes))
   if (!secretsMatch) {
+    // A failed secret is the one probe on this worker worth a trace: it is
+    // the sole gate on dispatching the apply-fix workflow.
+    console.warn(`[bugpilot] webhook auth failure from ${request.headers.get('CF-Connecting-IP') ?? 'unknown ip'}`)
     return jsonError('Unauthorized', 401, corsHeaders)
   }
 
@@ -453,6 +498,14 @@ function formatPriority(v: string | null | undefined): string {
     'nice': 'Nice to have',
   }
   return map[v ?? ''] ?? '—'
+}
+
+function neutraliseMarkers(v: string | null | undefined): string | null {
+  if (v == null) return null
+  // The zero-width space (U+200B) stops '-->' in user text from closing the
+  // HTML comment that carries the structured block, without visibly altering
+  // the rendered issue body.
+  return v.replace(/bugpilot:(structured|end)/gi, 'bugpilot $1').replace(/-->/g, '--\u200b>')
 }
 
 function jsonError(message: string, status: number, corsHeaders: Record<string, string>): Response {

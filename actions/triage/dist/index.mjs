@@ -51233,10 +51233,14 @@ function buildUserMessage(issue, structured) {
 
 function parseStructuredBlock(body) {
   if (!body) return null
-  const match = body.match(/<!-- bugpilot:structured\n([\s\S]*?)\nbugpilot:end -->/)
-  if (!match) return null
+  // Take the LAST match: the worker appends the genuine block at the end of
+  // the issue body, so a marker smuggled into user-supplied text (which sits
+  // above it) can never shadow it. The worker also neutralises the markers
+  // in user text; this is the parser-side half of the same defence.
+  const matches = [...body.matchAll(/<!-- bugpilot:structured\n([\s\S]*?)\nbugpilot:end -->/g)]
+  if (!matches.length) return null
   try {
-    return JSON.parse(match[1])
+    return JSON.parse(matches[matches.length - 1][1])
   } catch {
     return null
   }

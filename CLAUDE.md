@@ -59,6 +59,8 @@ bugpilot:end -->
 
 CSS custom properties only — no Shadow DOM. Scoped `.bp-*` class names. Host app overrides `--bp-primary`, `--bp-surface`, `--bp-text`, `--bp-radius`, `--bp-z-index` etc.
 
+The default palette is grayscale by design: brand colour comes from the host app (via `BugPilot.init({ color })` or the `--bp-*` variables), never from the widget's own defaults. `--bp-error` and `--bp-success` default to semantic red/green because they signal state rather than brand; hosts can override them like any other token.
+
 ## Widget configuration
 
 ```js

@@ -36,3 +36,6 @@ Thumbs.db
 
 # Session management
 nextsession.md
+
+# Engineering audit output (public repo: reports stay local)
+audit-output/

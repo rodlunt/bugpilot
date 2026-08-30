@@ -1,6 +1,9 @@
 import { captureContext } from './context.js'
 import { captureScreenshot } from './screenshot.js'
 import cssText from './styles.css?inline'
+import { resolveIcon } from './icon.js'
+import { DragTracker, SIDES, defaultY, readDock, writeDock } from './dock.js'
+import { sanitiseUser } from './user.js'
 
 const BUG_CATEGORIES = [
   'UI / Visual issue',
@@ -17,8 +20,15 @@ export class BugPilotWidget {
     this._cfg = {
       position: 'bottom-right',
       triggerLabel: 'Feedback',
+      variant: 'pill',
+      side: 'right',
+      icon: null,
+      user: null,
       ...config,
     }
+    this._user = sanitiseUser(this._cfg.user)
+    if (this._cfg.variant !== 'tab') this._cfg.variant = 'pill'
+    if (!SIDES.has(this._cfg.side)) this._cfg.side = 'right'
     this._type = 'bug'
     this._screenshot = null
     this._submitting = false
@@ -59,24 +69,37 @@ export class BugPilotWidget {
     const VALID_POSITIONS = new Set(['bottom-right', 'bottom-left', 'top-right', 'top-left'])
     const pos = VALID_POSITIONS.has(this._cfg.position) ? this._cfg.position : 'bottom-right'
 
+    const isTab = this._cfg.variant === 'tab'
+    const icon = resolveIcon(this._cfg.icon, this._cfg.variant)
+
     this._trigger = document.createElement('button')
-    this._trigger.className = `bp-trigger bp-trigger--${pos}`
+    this._trigger.type = 'button'
     this._trigger.setAttribute('aria-label', 'Open feedback form')
-    this._trigger.innerHTML = `
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-      </svg>
-    `
-    const triggerLabel = document.createElement('span')
-    triggerLabel.textContent = this._cfg.triggerLabel
-    this._trigger.appendChild(triggerLabel)
+    if (isTab) {
+      // Outer button is the 44px hit area; the inner face is the visible
+      // 36px square docked against the viewport edge.
+      this._trigger.className = 'bp-trigger bp-trigger--tab'
+      const face = document.createElement('span')
+      face.className = 'bp-tab-face'
+      face.innerHTML = icon
+      this._trigger.appendChild(face)
+    } else {
+      this._trigger.className = `bp-trigger bp-trigger--pill bp-trigger--${pos}`
+      const iconWrap = document.createElement('span')
+      iconWrap.className = 'bp-trigger-icon'
+      iconWrap.innerHTML = icon
+      this._trigger.appendChild(iconWrap)
+      const triggerLabel = document.createElement('span')
+      triggerLabel.textContent = this._cfg.triggerLabel
+      this._trigger.appendChild(triggerLabel)
+    }
 
     this._backdrop = document.createElement('div')
     this._backdrop.className = 'bp-backdrop'
     this._backdrop.setAttribute('aria-hidden', 'true')
 
     this._dialog = document.createElement('div')
-    this._dialog.className = `bp-dialog bp-dialog--${pos}`
+    this._dialog.className = isTab ? 'bp-dialog bp-dialog--tab' : `bp-dialog bp-dialog--${pos}`
     this._dialog.setAttribute('role', 'dialog')
     this._dialog.setAttribute('aria-modal', 'true')
     this._dialog.setAttribute('aria-labelledby', 'bp-dialog-title')
@@ -104,6 +127,105 @@ export class BugPilotWidget {
     this._statusEl          = this._dialog.querySelector('#bp-status')
 
     this._populateContext()
+    if (isTab) this._initDock()
+  }
+
+  // --- Tab variant: edge docking, drag along the edge, side swap ---------
+
+  _storage() {
+    try { return window.localStorage } catch { return null }
+  }
+
+  _initDock() {
+    const vh = window.innerHeight
+    const stored = readDock(this._storage(), window.location.origin, vh)
+    this._dock = new DragTracker({
+      side: stored ? stored.side : this._cfg.side,
+      y: stored ? stored.y : defaultY(vh),
+      viewportWidth: window.innerWidth,
+      viewportHeight: vh,
+    })
+    this._suppressClick = false
+    this._applyDock()
+
+    this._onResize = () => {
+      this._dock.resize(window.innerWidth, window.innerHeight)
+      this._applyDock()
+    }
+    window.addEventListener('resize', this._onResize)
+  }
+
+  _applyDock() {
+    const { side, y } = this._dock
+    this._trigger.classList.toggle('bp-trigger--left', side === 'left')
+    this._trigger.classList.toggle('bp-trigger--right', side === 'right')
+    this._dialog.classList.toggle('bp-dialog--left', side === 'left')
+    this._dialog.classList.toggle('bp-dialog--right', side === 'right')
+    this._trigger.style.top = `${y}px`
+    this._trigger.style.transform = ''
+    this._trigger.setAttribute('data-bp-side', side)
+  }
+
+  // Settle the trigger onto its edge after a drag. If the side changed, the
+  // element is re-anchored to the other edge, so its current on-screen x is
+  // re-expressed as an offset from the new rest position and then cleared,
+  // which lets the CSS transform transition carry it across (no transition
+  // under prefers-reduced-motion, so it simply jumps).
+  _snapTo(result) {
+    const t = this._trigger
+    const before = t.getBoundingClientRect?.()
+    this._applyDock()
+    if (!before || typeof requestAnimationFrame !== 'function') return
+    const restLeft = result.side === 'left' ? 0 : window.innerWidth - before.width
+    const dx = before.left - restLeft
+    if (!dx) return
+    t.classList.add('bp-trigger--dragging')
+    t.style.transform = `translateX(${dx}px)`
+    void t.offsetWidth
+    t.classList.remove('bp-trigger--dragging')
+    requestAnimationFrame(() => { t.style.transform = '' })
+  }
+
+  _bindDock() {
+    const t = this._trigger
+    this._onPointerDown = (e) => {
+      if (e.button !== undefined && e.button !== 0) return
+      this._dock.start(e.clientX, e.clientY)
+      this._pointerId = e.pointerId
+      t.setPointerCapture?.(e.pointerId)
+    }
+    this._onPointerMove = (e) => {
+      if (this._pointerId !== undefined && e.pointerId !== this._pointerId) return
+      const frame = this._dock.move(e.clientX, e.clientY)
+      if (!frame) return
+      if (!t.classList.contains('bp-trigger--dragging')) t.classList.add('bp-trigger--dragging')
+      t.style.top = `${frame.y}px`
+      t.style.transform = `translateX(${frame.dx}px)`
+      e.preventDefault()
+    }
+    this._onPointerUp = (e) => {
+      if (this._pointerId !== undefined && e.pointerId !== this._pointerId) return
+      this._pointerId = undefined
+      const result = this._dock.end()
+      t.classList.remove('bp-trigger--dragging')
+      if (!result.wasDrag) return   // the click event that follows opens the dialog
+      // A drag must not also fire the click that the browser dispatches
+      // after pointerup on the same element.
+      this._suppressClick = true
+      this._snapTo(result)
+      writeDock(this._storage(), window.location.origin, result)
+    }
+    this._onPointerCancel = (e) => {
+      if (this._pointerId !== undefined && e.pointerId !== this._pointerId) return
+      this._pointerId = undefined
+      this._dock.cancel()
+      t.classList.remove('bp-trigger--dragging')
+      this._applyDock()
+    }
+    t.addEventListener('pointerdown', this._onPointerDown)
+    t.addEventListener('pointermove', this._onPointerMove)
+    t.addEventListener('pointerup', this._onPointerUp)
+    t.addEventListener('pointercancel', this._onPointerCancel)
   }
 
   _dialogHTML() {
@@ -232,7 +354,11 @@ export class BugPilotWidget {
   }
 
   _bind() {
-    this._trigger.addEventListener('click', () => this.open())
+    this._trigger.addEventListener('click', () => {
+      if (this._suppressClick) { this._suppressClick = false; return }
+      this.open()
+    })
+    if (this._dock) this._bindDock()
     this._dialog.querySelector('#bp-close-btn').addEventListener('click', () => this.close())
     this._backdrop.addEventListener('click', () => this.close())
 
@@ -294,6 +420,7 @@ export class BugPilotWidget {
       screenshot: this._screenshot,
       context: ctx,
       projectName: this._cfg.projectName || document.title,
+      user: this._user,
     }
 
     const payload = this._type === 'bug'
@@ -325,8 +452,12 @@ export class BugPilotWidget {
         throw new Error(body.error || `HTTP ${res.status}`)
       }
 
-      const { issueUrl } = await res.json()
-      this._showStatus('success', issueUrl && /^https:\/\/github\.com\//.test(issueUrl) ? issueUrl : null)
+      const { issueUrl, issueNumber } = await res.json()
+      this._showStatus(
+        'success',
+        issueUrl && /^https:\/\/github\.com\//.test(issueUrl) ? issueUrl : null,
+        Number.isInteger(issueNumber) && issueNumber > 0 ? issueNumber : null,
+      )
       this._reset()
       this._autoCloseTimer = setTimeout(() => this.close(), 3000)
     } catch (err) {
@@ -339,10 +470,12 @@ export class BugPilotWidget {
     }
   }
 
-  _showStatus(type, issueUrl) {
+  // The issue number is the reporter's receipt: it is what they quote back
+  // and what a host "my reports" page keys on.
+  _showStatus(type, issueUrl, issueNumber) {
     this._statusEl.className = `bp-status bp-status--${type} bp-visible`
     this._statusEl.textContent = ''
-    const msg = document.createTextNode('Report submitted. ')
+    const msg = document.createTextNode(issueNumber ? `Report submitted as #${issueNumber}. ` : 'Report submitted. ')
     this._statusEl.appendChild(msg)
     if (issueUrl) {
       const a = document.createElement('a')
@@ -395,6 +528,7 @@ export class BugPilotWidget {
 
   destroy() {
     document.removeEventListener('keydown', this._onKeydown)
+    if (this._onResize) window.removeEventListener('resize', this._onResize)
     this._trigger?.remove()
     this._dialog?.remove()
     this._backdrop?.remove()

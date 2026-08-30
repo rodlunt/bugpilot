@@ -26,8 +26,19 @@ export const contextSchema = z.looseObject({
   referrer: z.string().max(2000).nullish(),
 })
 
+// Optional reporter identity from a signed-in host. Plain text only: angle
+// brackets are stripped so a name cannot smuggle markup into the issue body.
+const plainText = (max: number) =>
+  z.string().max(max).transform((s) => s.replace(/[<>]/g, '').trim()).nullish()
+
+export const userSchema = z.object({
+  name: plainText(120),
+  login: plainText(120),
+}).nullish()
+
 export const submissionSchema = z.object({
   type: z.enum(['bug', 'feature']).optional(),
+  user: userSchema,
   description: z.string().trim().min(1, 'description is required').max(10000),
   screenshot: z.string().nullish(),
   projectName: z.string().max(200).nullish(),
@@ -129,6 +140,12 @@ async function handleFeedback(
     expectedBehavior: neutraliseMarkers(parsed.data.expectedBehavior),
     stepsToReproduce: neutraliseMarkers(parsed.data.stepsToReproduce),
     problemStatement: neutraliseMarkers(parsed.data.problemStatement),
+    user: parsed.data.user
+      ? {
+          name: neutraliseMarkers(parsed.data.user.name),
+          login: neutraliseMarkers(parsed.data.user.login),
+        }
+      : null,
   }
 
   const [owner, repo] = env.GITHUB_REPO.split('/')
@@ -360,6 +377,33 @@ export function buildTitle(body: SubmissionPayload): string {
   return `${prefix}${typeLabel}${desc}${body.description.length > 72 ? '…' : ''}`
 }
 
+// Reporter as it appears in the human-readable body: "login (name)", or
+// whichever half was supplied. Absent (anonymous host, BR360 today) yields
+// null, no line and no `reporter` key, so existing deployments render
+// exactly as before.
+export function formatReporter(user: SubmissionPayload['user']): string | null {
+  if (!user) return null
+  const name = user.name || ''
+  const login = user.login || ''
+  if (name && login) return `${login} (${name})`
+  return login || name || null
+}
+
+function reporterLine(user: SubmissionPayload['user']): string {
+  const r = formatReporter(user)
+  return r ? `**Reporter:** ${r}\n\n` : ''
+}
+
+// Contract: `reporter: { name, login }` in the structured block, key omitted
+// entirely when no user was supplied. Groundwork's "My reports" page filters
+// issues on reporter.login, so the key name and shape are fixed.
+export function reporterStructured(user: SubmissionPayload['user']): { name: string | null; login: string | null } | undefined {
+  if (!user) return undefined
+  const name = user.name || null
+  const login = user.login || null
+  return name || login ? { name, login } : undefined
+}
+
 export function buildIssueBody(body: SubmissionPayload, screenshotUrl: string | null): string {
   return body.type === 'feature'
     ? buildFeatureBody(body, screenshotUrl)
@@ -395,6 +439,7 @@ function buildBugBody(body: SubmissionPayload, screenshotUrl: string | null): st
     impact: body.impact ?? null,
     projectName: body.projectName ?? null,
     screenshotUrl,
+    reporter: reporterStructured(body.user),
   })
 
   return `## What happened
@@ -424,7 +469,7 @@ ${stepsSection}## Details
 | Timestamp | ${ctx.timestamp} |
 | Project | ${body.projectName ?? '—'} |
 
-${screenshotSection}<!-- bugpilot:structured
+${reporterLine(body.user)}${screenshotSection}<!-- bugpilot:structured
 ${structured}
 bugpilot:end -->
 `
@@ -456,6 +501,7 @@ function buildFeatureBody(body: SubmissionPayload, screenshotUrl: string | null)
     problemStatement: body.problemStatement ?? null,
     projectName: body.projectName ?? null,
     screenshotUrl,
+    reporter: reporterStructured(body.user),
   })
 
   return `## Feature request
@@ -471,7 +517,7 @@ ${whySection}## Details
 | URL | ${ctx.url} |
 | Submitted | ${ctx.timestamp} |
 
-${screenshotSection}<!-- bugpilot:structured
+${reporterLine(body.user)}${screenshotSection}<!-- bugpilot:structured
 ${structured}
 bugpilot:end -->
 `

@@ -18,9 +18,22 @@
   --bp-error: #ef4444;
   --bp-required: #dc2626;
   --bp-success: #22c55e;
+  --bp-on-primary: #ffffff;
+  --bp-error-soft: rgba(239, 68, 68, 0.08);
+  --bp-success-soft: rgba(34, 197, 94, 0.08);
+  --bp-backdrop: rgba(0, 0, 0, 0.4);
   --bp-radius: 12px;
   --bp-radius-sm: 6px;
+  --bp-radius-xs: 4px;
+  --bp-border-width: 1px;
   --bp-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+  --bp-trigger-radius: 999px;
+  --bp-trigger-border-color: transparent;
+  --bp-trigger-shadow: 0 4px 14px var(--bp-primary-shadow, rgba(0, 0, 0, 0.25));
+  --bp-tab-size: 36px;
+  --bp-tab-hit: 44px;
+  --bp-tab-peek: 4px;
+  --bp-tab-radius: 0;
   --bp-z-index: 2147483647;
   --bp-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
@@ -34,16 +47,17 @@
   gap: 8px;
   padding: 10px 16px;
   background: var(--bp-primary);
-  color: #fff;
-  border: none;
-  border-radius: 999px;
+  color: var(--bp-on-primary);
+  border: var(--bp-border-width) solid var(--bp-trigger-border-color);
+  border-radius: var(--bp-trigger-radius);
   font-family: var(--bp-font);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  box-shadow: 0 4px 14px var(--bp-primary-shadow, rgba(0, 0, 0, 0.25));
+  box-shadow: var(--bp-trigger-shadow);
   transition: background 0.15s, transform 0.1s;
   user-select: none;
+  box-sizing: border-box;
 }
 
 .bp-trigger:hover {
@@ -63,11 +77,108 @@
   flex-shrink: 0;
 }
 
+.bp-trigger-icon {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Tab variant: icon-only square docked flush against a viewport edge.
+   The button is the 44px hit area (WCAG 2.5.8); the face is the visible
+   36px square. At rest the face tucks --bp-tab-peek under the edge so it
+   reads as a drawer handle; hover, focus and drag slide it fully out. */
+.bp-trigger--tab {
+  width: var(--bp-tab-hit);
+  height: var(--bp-tab-hit);
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  justify-content: center;
+  touch-action: none;
+  transition: transform 0.2s;
+}
+
+.bp-trigger--tab:active {
+  transform: none;
+}
+
+.bp-trigger--tab.bp-trigger--right { right: 0; }
+.bp-trigger--tab.bp-trigger--left  { left: 0; }
+
+.bp-tab-face {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--bp-tab-size);
+  height: var(--bp-tab-size);
+  box-sizing: border-box;
+  background: var(--bp-primary);
+  color: var(--bp-on-primary);
+  border: var(--bp-border-width) solid var(--bp-trigger-border-color);
+  box-shadow: var(--bp-trigger-shadow);
+  transition: transform 0.15s, background 0.15s;
+}
+
+.bp-tab-face svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* (hit - size) / 2 is the gap between the centred face and the button edge;
+   adding the peek tucks the face under the viewport edge. */
+.bp-trigger--right .bp-tab-face {
+  border-radius: var(--bp-tab-radius) 0 0 var(--bp-tab-radius);
+  border-right-width: 0;
+  transform: translateX(calc((var(--bp-tab-hit) - var(--bp-tab-size)) / 2 + var(--bp-tab-peek)));
+}
+
+.bp-trigger--left .bp-tab-face {
+  border-radius: 0 var(--bp-tab-radius) var(--bp-tab-radius) 0;
+  border-left-width: 0;
+  transform: translateX(calc(-1 * ((var(--bp-tab-hit) - var(--bp-tab-size)) / 2 + var(--bp-tab-peek))));
+}
+
+.bp-trigger--right:hover .bp-tab-face,
+.bp-trigger--right:focus-visible .bp-tab-face,
+.bp-trigger--right.bp-trigger--dragging .bp-tab-face {
+  transform: translateX(calc((var(--bp-tab-hit) - var(--bp-tab-size)) / 2));
+}
+
+.bp-trigger--left:hover .bp-tab-face,
+.bp-trigger--left:focus-visible .bp-tab-face,
+.bp-trigger--left.bp-trigger--dragging .bp-tab-face {
+  transform: translateX(calc(-1 * ((var(--bp-tab-hit) - var(--bp-tab-size)) / 2)));
+}
+
+.bp-trigger--tab:hover .bp-tab-face {
+  background: var(--bp-primary-hover);
+}
+
+.bp-trigger--dragging {
+  transition: none;
+  cursor: grabbing;
+}
+
+.bp-trigger--dragging .bp-tab-face {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bp-trigger,
+  .bp-trigger--tab,
+  .bp-tab-face,
+  .bp-dialog,
+  .bp-backdrop {
+    transition: none;
+  }
+}
+
 /* Overlay backdrop */
 .bp-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--bp-backdrop);
   z-index: var(--bp-z-index);
   opacity: 0;
   pointer-events: none;
@@ -89,6 +200,7 @@
   max-width: calc(100vw - 32px);
   max-height: calc(100vh - 120px);
   background: var(--bp-surface);
+  border: var(--bp-border-width) solid var(--bp-border);
   border-radius: var(--bp-radius);
   box-shadow: var(--bp-shadow);
   display: flex;
@@ -109,6 +221,8 @@
 .bp-dialog--bottom-left  { right: auto; left: 24px; }
 .bp-dialog--top-right    { bottom: auto; top: 84px; }
 .bp-dialog--top-left     { bottom: auto; top: 84px; right: auto; left: 24px; }
+.bp-dialog--tab.bp-dialog--right { bottom: 24px; right: 24px; }
+.bp-dialog--tab.bp-dialog--left  { bottom: 24px; right: auto; left: 24px; }
 
 /* Dialog header */
 .bp-header {
@@ -212,7 +326,7 @@
   color: var(--bp-text-muted);
   background: var(--bp-surface-raised);
   border: 1px solid var(--bp-border);
-  border-radius: 4px;
+  border-radius: var(--bp-radius-xs);
   padding: 2px 8px;
 }
 
@@ -273,7 +387,7 @@
   font-family: var(--bp-font);
   font-size: 14px;
   font-weight: 500;
-  color: #fff;
+  color: var(--bp-on-primary);
   background: var(--bp-primary);
   border: none;
   border-radius: var(--bp-radius-sm);
@@ -349,10 +463,10 @@
 
 .bp-status--error {
   color: var(--bp-error);
-  background: rgba(239, 68, 68, 0.08);
+  background: var(--bp-error-soft);
 }
 
 .bp-status--success {
   color: var(--bp-success);
-  background: rgba(34, 197, 94, 0.08);
+  background: var(--bp-success-soft);
 }

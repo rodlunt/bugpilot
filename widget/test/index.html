@@ -43,6 +43,32 @@
     }
     button:hover { background: #4f46e5; }
     code { font-size: 12px; background: #f8fafc; padding: 2px 6px; border-radius: 4px; }
+
+    /* Editorial theme, kept in step with the README example */
+    html.editorial {
+      --bp-primary: #1c1b1a;
+      --bp-primary-hover: #3a3835;
+      --bp-primary-soft: rgba(28, 27, 26, 0.06);
+      --bp-on-primary: #ffffff;
+      --bp-required: #b3401d;
+      --bp-error: #b3401d;
+      --bp-error-soft: rgba(179, 64, 29, 0.08);
+      --bp-surface: #fff6e5;
+      --bp-surface-raised: #ffffff;
+      --bp-border: #1c1b1a;
+      --bp-border-width: 1px;
+      --bp-trigger-border-color: #1c1b1a;
+      --bp-text: #1c1b1a;
+      --bp-text-muted: #5e5a54;
+      --bp-radius: 0;
+      --bp-radius-sm: 0;
+      --bp-radius-xs: 0;
+      --bp-trigger-radius: 0;
+      --bp-tab-radius: 0;
+      --bp-shadow: none;
+      --bp-trigger-shadow: none;
+      --bp-font: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    }
   </style>
 </head>
 <body>
@@ -54,6 +80,11 @@
     <input id="endpoint" type="url" value="http://localhost:8787/feedback" />
     <label for="project">Project name</label>
     <input id="project" type="text" value="Test Harness" />
+    <label for="variant">Variant</label>
+    <select id="variant"><option value="pill">pill (default)</option><option value="tab">tab</option></select>
+    <label for="side">Side (tab only)</label>
+    <select id="side"><option value="right">right (default)</option><option value="left">left</option></select>
+    <label for="editorial"><input id="editorial" type="checkbox" style="width:auto;margin:0 6px 0 0" />Editorial theme (README example)</label>
     <button onclick="reinit()">Reinit widget with these settings</button>
   </div>
 
@@ -72,11 +103,17 @@
     function init() {
       const endpoint = document.getElementById('endpoint').value
       const projectName = document.getElementById('project').value
+      const variant = document.getElementById('variant').value
+      const side = document.getElementById('side').value
+      document.documentElement.classList.toggle('editorial', document.getElementById('editorial').checked)
       BugPilot.init({
         endpoint,
         projectName,
         position: 'bottom-right',
+        variant,
+        side,
         labels: ['bug', 'test'],
+        user: { name: 'Test Reporter', login: 'harness' },
       })
     }
 

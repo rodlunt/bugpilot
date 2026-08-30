@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import path from 'path'
-import { safePath, ntfyServerAndTopic } from './lib.mjs'
+import { safePath, ntfyServerAndTopic, houseStyle } from './lib.mjs'
 
 const ROOT = path.resolve('/repo')
 
@@ -45,5 +45,23 @@ describe('ntfyServerAndTopic', () => {
 
   it('throws on a bare slug (apply-fix requires a full URL)', () => {
     expect(() => ntfyServerAndTopic('just-a-slug')).toThrow()
+  })
+})
+
+describe('houseStyle', () => {
+  it('replaces em and en dashes with a comma and turns exclamation marks into full stops', () => {
+    expect(houseStyle('Guarded the null — added a test!')).toBe('Guarded the null, added a test.')
+    expect(houseStyle('2024–2025 range')).toBe('2024, 2025 range')
+  })
+
+  it('leaves compliant text alone', () => {
+    const clean = 'Guarded the null in safePath and added a test (issue #12).'
+    expect(houseStyle(clean)).toBe(clean)
+  })
+
+  it('control: a summary with a dash and an exclamation mark is changed, not passed through', () => {
+    const offending = 'Done — fixed it!'
+    expect(houseStyle(offending)).not.toBe(offending)
+    expect(houseStyle(offending)).not.toMatch(/[—–!]/)
   })
 })

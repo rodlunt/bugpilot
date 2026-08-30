@@ -51091,6 +51091,19 @@ function ntfyServerAndTopic(topicUrl) {
   return { server: `${u.protocol}//${u.host}`, topic: u.pathname.replace(/^\//, '') }
 }
 
+// House style guard for the model's report_done summary, which ends up in
+// the commit message, PR title and body, issue comment and ntfy text. Same
+// rules as actions/triage/lib.mjs: dashes become ", " and a sentence-ending
+// exclamation mark becomes a full stop. Kept as a copy rather than a shared
+// module because each action is bundled and tested on its own.
+function houseStyle(text) {
+  if (typeof text !== 'string') return text
+  return text
+    .replace(/\s*[—–]\s*/g, ', ')
+    .replace(/([,:])\s*,\s+/g, '$1 ')
+    .replace(/!+(?=\s|$|["')\]])/g, '.')
+}
+
 ;// CONCATENATED MODULE: ./index.mjs
 
 
@@ -51114,10 +51127,16 @@ Your job:
 
 Rules:
 - Read files before modifying them
-- Make the smallest change that fixes the bug — do not refactor unrelated code
+- Make the smallest change that fixes the bug. Do not refactor unrelated code
 - Do not modify package.json, package-lock.json, or any lockfiles
 - Do not modify test files unless the bug is in a test
-- If the issue lacks enough information to implement a fix confidently, explain why in report_done without modifying any files`
+- If the issue lacks enough information to implement a fix confidently, explain why in report_done without modifying any files
+
+House style for the report_done summary (it becomes the commit message, PR title and body, and the issue comment):
+- Australian English spelling (organise, colour, behaviour).
+- Never use an em dash or an en dash. Use a comma, a colon, a full stop or parentheses instead.
+- Never use the words "honestly", "worth noting", "worth flagging" or "load-bearing", and never use "flag" or "flagging" to mean raising a point.
+- Plain register: no exclamation marks, no emoji, no thanks, no praise. State what changed and why.`
 
 async function run() {
   const issueNumber = parseInt(getInput('issue-number', { required: true }), 10)
@@ -51172,7 +51191,7 @@ async function run() {
     ;(0,external_child_process_namespaceObject.execFileSync)('git', ['push', 'origin', '--delete', branchName], { stdio: 'pipe' })
     info(`Deleted existing remote branch ${branchName}`)
   } catch {
-    // Branch didn't exist — that's fine
+    // Branch did not exist, which is fine
   }
 
   (0,external_child_process_namespaceObject.execFileSync)('git', ['checkout', '-b', branchName])
@@ -51182,7 +51201,7 @@ async function run() {
     try {
       ;(0,external_child_process_namespaceObject.execFileSync)('git', ['add', filePath])
     } catch {
-      warning(`Could not stage ${filePath} — skipping`)
+      warning(`Could not stage ${filePath}, skipping`)
     }
   }
 
@@ -51232,7 +51251,7 @@ async function run() {
   } catch (err) {
     if (err.status === 403) {
       warning(
-        'PR creation blocked — enable "Allow GitHub Actions to create and approve pull requests" in Settings → Actions → General.',
+        'PR creation blocked. Enable "Allow GitHub Actions to create and approve pull requests" in Settings → Actions → General.',
       )
     } else {
       throw err
@@ -51248,7 +51267,7 @@ async function run() {
       ? [
           '### bugpilot apply-fix',
           '',
-          '**Status:** Fix implemented — PR ready for review.',
+          '**Status:** Fix implemented. PR ready for review.',
           `**Branch:** \`${branchName}\``,
           `**Files changed:** ${stagedFiles.split('\n').length}`,
           '',
@@ -51259,7 +51278,7 @@ async function run() {
       : [
           '### bugpilot apply-fix',
           '',
-          '**Status:** Fix committed to branch — open a PR manually.',
+          '**Status:** Fix committed to branch. Open a PR manually.',
           `**Branch:** \`${branchName}\``,
           `**Files changed:** ${stagedFiles.split('\n').length}`,
           '',
@@ -51307,7 +51326,7 @@ async function runAgenticLoop(client, model, prompt, legitimateWrites) {
           },
         ],
       })
-      return { summary: doneCall.input.summary }
+      return { summary: houseStyle(doneCall.input.summary) }
     }
 
     if (response.stop_reason === 'end_turn') {
@@ -51316,7 +51335,7 @@ async function runAgenticLoop(client, model, prompt, legitimateWrites) {
         .map((b) => b.text)
         .join('\n')
         .trim()
-      return { summary: text.slice(0, 300) || 'Fix implemented' }
+      return { summary: houseStyle(text.slice(0, 300)) || 'Fix implemented' }
     }
 
     const toolUses = response.content.filter((b) => b.type === 'tool_use')
@@ -51326,7 +51345,7 @@ async function runAgenticLoop(client, model, prompt, legitimateWrites) {
         .map((b) => b.text)
         .join('\n')
         .trim()
-      return { summary: text.slice(0, 300) || 'Fix implemented' }
+      return { summary: houseStyle(text.slice(0, 300)) || 'Fix implemented' }
     }
 
     messages.push({ role: 'assistant', content: response.content })
@@ -51461,7 +51480,7 @@ function buildTools() {
 
 function buildPrompt(issue, triageComment) {
   const parts = [
-    `## Bug report — Issue #${issue.number}`,
+    `## Bug report: Issue #${issue.number}`,
     '',
     `**Title:** ${issue.title}`,
     '',

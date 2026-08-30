@@ -21,3 +21,16 @@ export function ntfyServerAndTopic(topicUrl) {
   const u = new URL(topicUrl)
   return { server: `${u.protocol}//${u.host}`, topic: u.pathname.replace(/^\//, '') }
 }
+
+// House style guard for the model's report_done summary, which ends up in
+// the commit message, PR title and body, issue comment and ntfy text. Same
+// rules as actions/triage/lib.mjs: dashes become ", " and a sentence-ending
+// exclamation mark becomes a full stop. Kept as a copy rather than a shared
+// module because each action is bundled and tested on its own.
+export function houseStyle(text) {
+  if (typeof text !== 'string') return text
+  return text
+    .replace(/\s*[—–]\s*/g, ', ')
+    .replace(/([,:])\s*,\s+/g, '$1 ')
+    .replace(/!+(?=\s|$|["')\]])/g, '.')
+}

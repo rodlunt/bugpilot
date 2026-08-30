@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseStructuredBlock, buildComment, deriveLabels, ntfyServerAndTopic, buildUserMessage } from './lib.mjs'
+import { parseStructuredBlock, buildComment, deriveLabels, ntfyServerAndTopic, buildUserMessage, houseStyle, applyHouseStyle } from './lib.mjs'
 
 const block = (json) => `<!-- bugpilot:structured\n${json}\nbugpilot:end -->`
 
@@ -63,5 +63,65 @@ describe('buildUserMessage', () => {
     const msg = buildUserMessage({ number: 7, title: 'T', body: 'B' }, { type: 'bug' })
     expect(msg).toContain('Issue #7: T')
     expect(msg).toContain('"type": "bug"')
+  })
+})
+
+describe('houseStyle', () => {
+  it('replaces em and en dashes with a comma and one space', () => {
+    expect(houseStyle('You are right — on a narrow viewport it scrolls')).toBe('You are right, on a narrow viewport it scrolls')
+    expect(houseStyle('fix–verify loop')).toBe('fix, verify loop')
+    expect(houseStyle('a—b')).toBe('a, b')
+  })
+
+  it('turns sentence-ending exclamation marks into full stops', () => {
+    expect(houseStyle('Thanks for reporting this! We are on it!!')).toBe('Thanks for reporting this. We are on it.')
+    expect(houseStyle('(great catch!)')).toBe('(great catch.)')
+  })
+
+  it('does not double up punctuation when a dash follows a comma or colon', () => {
+    expect(houseStyle('Note: — the widget')).toBe('Note: the widget')
+    expect(houseStyle('however, — it works')).toBe('however, it works')
+  })
+
+  it('leaves compliant text alone, including hyphens and mid-word marks', () => {
+    const clean = 'The tab-widget code window overflows: it needs a resize handle (see #208).'
+    expect(houseStyle(clean)).toBe(clean)
+    expect(houseStyle('a!b')).toBe('a!b')
+  })
+
+  it('passes non-strings through untouched', () => {
+    expect(houseStyle(null)).toBeNull()
+    expect(houseStyle(undefined)).toBeUndefined()
+  })
+
+  it('control: the guard must change the real Groundwork#268 draft, so a broken guard is caught', () => {
+    const offending = 'You\'re right — on a narrow viewport the code window falls back to internal scrolling. Keep the great feedback coming!'
+    const out = houseStyle(offending)
+    expect(out).not.toBe(offending)
+    expect(out).not.toMatch(/[—–!]/)
+  })
+})
+
+describe('applyHouseStyle', () => {
+  it('rewrites the prose fields and leaves the rest of the triage object alone', () => {
+    const triage = {
+      classification: 'bug',
+      severity: 'high',
+      reproducible: true,
+      proposed_fix: 'Use a resizable container — not internal scrolling',
+      response_draft: 'Understood!',
+    }
+    expect(applyHouseStyle(triage)).toEqual({
+      classification: 'bug',
+      severity: 'high',
+      reproducible: true,
+      proposed_fix: 'Use a resizable container, not internal scrolling',
+      response_draft: 'Understood.',
+    })
+  })
+
+  it('tolerates missing prose fields and non-object input', () => {
+    expect(applyHouseStyle({ classification: 'spam' })).toEqual({ classification: 'spam' })
+    expect(applyHouseStyle(null)).toBeNull()
   })
 })

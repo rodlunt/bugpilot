@@ -1,7 +1,7 @@
 import * as core from '@actions/core'
 import * as github from '@actions/github'
 import Anthropic from '@anthropic-ai/sdk'
-import { parseStructuredBlock, buildUserMessage, buildComment, deriveLabels, ntfyServerAndTopic } from './lib.mjs'
+import { parseStructuredBlock, buildUserMessage, buildComment, deriveLabels, ntfyServerAndTopic, applyHouseStyle } from './lib.mjs'
 
 const SYSTEM_PROMPT = `You are a senior engineer triaging user-submitted bug reports and feature requests.
 You will be given a structured report from bugpilot. Analyse it carefully and call the triage_report tool with your assessment.
@@ -9,14 +9,22 @@ You will be given a structured report from bugpilot. Analyse it carefully and ca
 For bugs:
 - Is it reproducible given the information provided?
 - What is the likely root cause?
-- What is the proposed fix? Be specific about what code or behaviour needs to change — one or two sentences, no actual code.
+- What is the proposed fix? Be specific about what code or behaviour needs to change: one or two sentences, no actual code.
 
 For feature requests:
 - Is it feasible and well-defined?
 - What is the effort level?
 - proposed_fix should be null.
 
-Always draft a friendly, human response_draft to post back to the reporter.`
+Always draft a response_draft to post back to the reporter. It is a short reply from a competent engineer: state what was understood from the report and what will happen next. Nothing else.
+
+House style for every piece of prose you write (proposed_fix and response_draft):
+- Australian English spelling (organise, colour, analyse, behaviour, defence).
+- Never use an em dash or an en dash. Use a comma, a colon, a full stop or parentheses instead.
+- Never use the words "honestly", "worth noting", "worth flagging", "worth mentioning" or "load-bearing".
+- Never use "flag" or "flagging" to mean raising or reporting a point ("thanks for flagging", "I want to flag"). Say "reporting" or "raising" if you need the idea at all.
+- Plain register: no exclamation marks, no emoji, no greetings such as "Hi" or "Hey", no thanks, no praise, no encouragement ("keep the feedback coming"), no apologies and no marketing tone.
+- Do not restate the report back at length. Two to four sentences is the normal length for response_draft.`
 
 async function run() {
   const apiKey = core.getInput('anthropic-api-key', { required: true })
@@ -30,7 +38,7 @@ async function run() {
 
   const labelNames = issue.labels.map((l) => l.name)
   if (!labelNames.includes('user-feedback')) {
-    core.info('No user-feedback label — skipping')
+    core.info('No user-feedback label, skipping')
     return
   }
 
@@ -38,13 +46,13 @@ async function run() {
   const issueUrl = `https://github.com/${owner}/${repo}/issues/${issue.number}`
   core.info(`Triaging issue #${issue.number} (type: ${structured?.type ?? 'unknown'})`)
 
-  // Feature requests don't need AI triage — just acknowledge and notify
+  // Feature requests do not need AI triage: acknowledge and notify
   if (structured?.type === 'feature' || labelNames.includes('enhancement')) {
     await octokit.rest.issues.createComment({
       owner,
       repo,
       issue_number: issue.number,
-      body: `### Feature request logged\n\nThanks for the suggestion — this has been added to the backlog for review. [View issue](${issueUrl})`,
+      body: `### Feature request logged\n\nThis has been added to the backlog for review. [View issue](${issueUrl})`,
     })
     const ntfyTopic = core.getInput('ntfy-topic')
     const ntfyToken = core.getInput('ntfy-token')
@@ -82,7 +90,7 @@ async function run() {
     return
   }
 
-  const triage = toolUse.input
+  const triage = applyHouseStyle(toolUse.input)
   core.info(`Triage result: ${JSON.stringify(triage)}`)
 
   await octokit.rest.issues.createComment({
@@ -128,7 +136,7 @@ function triageTool() {
         severity: {
           type: 'string',
           enum: ['critical', 'high', 'medium', 'low'],
-          description: 'Bug severity only — omit for features',
+          description: 'Bug severity only. Omit for features.',
         },
         reproducible: {
           type: 'boolean',
@@ -140,7 +148,7 @@ function triageTool() {
         },
         response_draft: {
           type: 'string',
-          description: 'Friendly response to post to the reporter',
+          description: 'Short plain-register reply to post to the reporter: what was understood and what will happen next',
         },
       },
     },
@@ -180,7 +188,7 @@ async function sendNtfy({ ntfyTopic, ntfyToken, webhookSecret, workerBase, issue
 
   const severityPart = triage.severity ? ` [${triage.severity}]` : ''
   const title = `Bug${severityPart}: ${issue.title.replace(/^\[.*?\]\s*Bug:\s*/, '').slice(0, 80)}`
-  const message = triage.proposed_fix || 'Triage complete — no fix proposed.'
+  const message = triage.proposed_fix || 'Triage complete. No fix proposed.'
 
   const actions = []
 

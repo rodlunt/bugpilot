@@ -77,3 +77,32 @@ export function ntfyServerAndTopic(topicUrl) {
   const u = new URL(resolved)
   return { server: `${u.protocol}//${u.host}`, topic: u.pathname.replace(/^\//, '') }
 }
+
+// House style guard for prose the model produces. The system prompt asks
+// for Australian English, no em or en dashes and no exclamation marks, but
+// the model does not always comply, so the mechanical part is enforced
+// here. A dash is replaced with ", " (a comma or colon rewrite cannot be
+// done mechanically, and a comma reads correctly in almost every case) and
+// a sentence-ending exclamation mark becomes a full stop. Banned words are
+// not rewritten: there is no safe mechanical substitute for a word, so the
+// prompt is the only defence for those.
+export function houseStyle(text) {
+  if (typeof text !== 'string') return text
+  return text
+    // A spaced dash ("a — b", "a – b") collapses to a comma with one space.
+    .replace(/\s*[—–]\s*/g, ', ')
+    // A comma we just produced directly after another comma or a colon
+    // is noise: "however, , b" and "note: , b".
+    .replace(/([,:])\s*,\s+/g, '$1 ')
+    // A run of exclamation marks at the end of a sentence becomes one full stop.
+    .replace(/!+(?=\s|$|["')\]])/g, '.')
+}
+
+export function applyHouseStyle(triage) {
+  if (!triage || typeof triage !== 'object') return triage
+  const out = { ...triage }
+  for (const key of ['proposed_fix', 'response_draft']) {
+    if (typeof out[key] === 'string') out[key] = houseStyle(out[key])
+  }
+  return out
+}

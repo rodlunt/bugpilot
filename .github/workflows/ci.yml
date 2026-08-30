@@ -30,6 +30,7 @@ jobs:
           cache: pnpm
           cache-dependency-path: widget/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
+      - run: pnpm test
       - run: pnpm build
 
   backend:
@@ -50,6 +51,7 @@ jobs:
           cache-dependency-path: backend/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
+      - run: pnpm test
 
   tests:
     name: tests (${{ matrix.directory }})

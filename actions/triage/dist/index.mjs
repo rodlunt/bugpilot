@@ -51155,6 +51155,35 @@ function ntfyServerAndTopic(topicUrl) {
   return { server: `${u.protocol}//${u.host}`, topic: u.pathname.replace(/^\//, '') }
 }
 
+// House style guard for prose the model produces. The system prompt asks
+// for Australian English, no em or en dashes and no exclamation marks, but
+// the model does not always comply, so the mechanical part is enforced
+// here. A dash is replaced with ", " (a comma or colon rewrite cannot be
+// done mechanically, and a comma reads correctly in almost every case) and
+// a sentence-ending exclamation mark becomes a full stop. Banned words are
+// not rewritten: there is no safe mechanical substitute for a word, so the
+// prompt is the only defence for those.
+function houseStyle(text) {
+  if (typeof text !== 'string') return text
+  return text
+    // A spaced dash ("a — b", "a – b") collapses to a comma with one space.
+    .replace(/\s*[—–]\s*/g, ', ')
+    // A comma we just produced directly after another comma or a colon
+    // is noise: "however, , b" and "note: , b".
+    .replace(/([,:])\s*,\s+/g, '$1 ')
+    // A run of exclamation marks at the end of a sentence becomes one full stop.
+    .replace(/!+(?=\s|$|["')\]])/g, '.')
+}
+
+function applyHouseStyle(triage) {
+  if (!triage || typeof triage !== 'object') return triage
+  const out = { ...triage }
+  for (const key of ['proposed_fix', 'response_draft']) {
+    if (typeof out[key] === 'string') out[key] = houseStyle(out[key])
+  }
+  return out
+}
+
 ;// CONCATENATED MODULE: ./index.mjs
 
 
@@ -51167,14 +51196,22 @@ You will be given a structured report from bugpilot. Analyse it carefully and ca
 For bugs:
 - Is it reproducible given the information provided?
 - What is the likely root cause?
-- What is the proposed fix? Be specific about what code or behaviour needs to change — one or two sentences, no actual code.
+- What is the proposed fix? Be specific about what code or behaviour needs to change: one or two sentences, no actual code.
 
 For feature requests:
 - Is it feasible and well-defined?
 - What is the effort level?
 - proposed_fix should be null.
 
-Always draft a friendly, human response_draft to post back to the reporter.`
+Always draft a response_draft to post back to the reporter. It is a short reply from a competent engineer: state what was understood from the report and what will happen next. Nothing else.
+
+House style for every piece of prose you write (proposed_fix and response_draft):
+- Australian English spelling (organise, colour, analyse, behaviour, defence).
+- Never use an em dash or an en dash. Use a comma, a colon, a full stop or parentheses instead.
+- Never use the words "honestly", "worth noting", "worth flagging", "worth mentioning" or "load-bearing".
+- Never use "flag" or "flagging" to mean raising or reporting a point ("thanks for flagging", "I want to flag"). Say "reporting" or "raising" if you need the idea at all.
+- Plain register: no exclamation marks, no emoji, no greetings such as "Hi" or "Hey", no thanks, no praise, no encouragement ("keep the feedback coming"), no apologies and no marketing tone.
+- Do not restate the report back at length. Two to four sentences is the normal length for response_draft.`
 
 async function run() {
   const apiKey = getInput('anthropic-api-key', { required: true })
@@ -51188,7 +51225,7 @@ async function run() {
 
   const labelNames = issue.labels.map((l) => l.name)
   if (!labelNames.includes('user-feedback')) {
-    info('No user-feedback label — skipping')
+    info('No user-feedback label, skipping')
     return
   }
 
@@ -51196,13 +51233,13 @@ async function run() {
   const issueUrl = `https://github.com/${owner}/${repo}/issues/${issue.number}`
   info(`Triaging issue #${issue.number} (type: ${structured?.type ?? 'unknown'})`)
 
-  // Feature requests don't need AI triage — just acknowledge and notify
+  // Feature requests do not need AI triage: acknowledge and notify
   if (structured?.type === 'feature' || labelNames.includes('enhancement')) {
     await octokit.rest.issues.createComment({
       owner,
       repo,
       issue_number: issue.number,
-      body: `### Feature request logged\n\nThanks for the suggestion — this has been added to the backlog for review. [View issue](${issueUrl})`,
+      body: `### Feature request logged\n\nThis has been added to the backlog for review. [View issue](${issueUrl})`,
     })
     const ntfyTopic = getInput('ntfy-topic')
     const ntfyToken = getInput('ntfy-token')
@@ -51240,7 +51277,7 @@ async function run() {
     return
   }
 
-  const triage = toolUse.input
+  const triage = applyHouseStyle(toolUse.input)
   info(`Triage result: ${JSON.stringify(triage)}`)
 
   await octokit.rest.issues.createComment({
@@ -51286,7 +51323,7 @@ function triageTool() {
         severity: {
           type: 'string',
           enum: ['critical', 'high', 'medium', 'low'],
-          description: 'Bug severity only — omit for features',
+          description: 'Bug severity only. Omit for features.',
         },
         reproducible: {
           type: 'boolean',
@@ -51298,7 +51335,7 @@ function triageTool() {
         },
         response_draft: {
           type: 'string',
-          description: 'Friendly response to post to the reporter',
+          description: 'Short plain-register reply to post to the reporter: what was understood and what will happen next',
         },
       },
     },
@@ -51338,7 +51375,7 @@ async function sendNtfy({ ntfyTopic, ntfyToken, webhookSecret, workerBase, issue
 
   const severityPart = triage.severity ? ` [${triage.severity}]` : ''
   const title = `Bug${severityPart}: ${issue.title.replace(/^\[.*?\]\s*Bug:\s*/, '').slice(0, 80)}`
-  const message = triage.proposed_fix || 'Triage complete — no fix proposed.'
+  const message = triage.proposed_fix || 'Triage complete. No fix proposed.'
 
   const actions = []
 

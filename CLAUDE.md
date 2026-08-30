@@ -47,13 +47,23 @@ The JSON block inside the HTML comment is what the Claude Action parses — keep
 | Timestamp | {iso_timestamp} |
 | Project | {projectName} |
 
+**Reporter:** {login} ({name})
+
 ## Screenshot
 ![Screenshot]({github_raw_url})
 
 <!-- bugpilot:structured
-{"url":"...","viewport":{"w":...,"h":...},"userAgent":"...","timestamp":"...","projectName":"...","screenshotUrl":"..."}
+{"url":"...","viewport":{"w":...,"h":...},"userAgent":"...","timestamp":"...","projectName":"...","screenshotUrl":"...","reporter":{"name":"...","login":"..."}}
 bugpilot:end -->
 ```
+
+**Reporter contract.** When the host passes `BugPilot.init({ user: { name, login } })`, the
+Worker renders a `**Reporter:** login (name)` line after the environment table (whichever half
+was supplied if only one was) and adds `reporter: { name, login }` to the JSON block, each half
+`null` when absent. When no user is supplied the line and the `reporter` key are omitted
+entirely, so anonymous deployments (BR360) produce the same body as before. Groundwork's "My
+reports" page filters issues on `reporter.login`, so the key name and shape are fixed: do not
+rename, nest or flatten it. Both fields are plain text, angle brackets stripped, max 120 chars.
 
 ## Widget theming
 
@@ -68,9 +78,16 @@ BugPilot.init({
   endpoint: 'https://your-worker.workers.dev/feedback',
   projectName: 'My Site',
   labels: ['bug', 'user-feedback'],  // applied to created GitHub issue
-  position: 'bottom-right',          // trigger button position
+  position: 'bottom-right',          // pill trigger position
+  variant: 'pill',                   // 'pill' (default) or 'tab' (edge-docked, draggable, icon-only)
+  side: 'right',                     // tab only: initial edge, 'right' or 'left'
+  icon: '<svg ...>',                 // optional inline SVG, sanitised, currentColor
+  user: { name, login },             // optional reporter identity, see structured body above
 })
 ```
+
+Every option and every `--bp-*` theming token is documented with its default in README.md
+("Widget options" and "Theming"); keep that table current when adding either.
 
 ## Commands
 
@@ -79,6 +96,7 @@ BugPilot.init({
 npm install
 npm run dev     # Vite dev server with test harness
 npm run build   # produces dist/bugpilot.es.js (ESM) and dist/bugpilot.iife.js (CDN script tag)
+npm test        # vitest + jsdom unit suite in widget/test/*.test.js
 ```
 
 **Worker** (`backend/`):

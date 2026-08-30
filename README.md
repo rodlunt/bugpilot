@@ -185,7 +185,7 @@ Contrast of every text/background pair in this theme (WCAG 2.x, AA needs 4.5:1 f
 
 - **Drop-in, minimal setup.** One script tag. One config object. Works.
 - **Theme-agnostic.** CSS custom properties inherit from the host app; the widget looks native. The default palette is grayscale, so colour only appears when the host supplies it (`BugPilot.init({ color })` or `--bp-*` overrides).
-- **BYO API key.** The Actions are reusable GitHub Actions — consumers supply their own `ANTHROPIC_API_KEY`.
+- **BYO credentials.** The Actions are reusable GitHub Actions: consumers authenticate with workload identity federation (no stored key) or supply their own `ANTHROPIC_API_KEY`.
 - **No external CDN required.** Screenshots are stored in a branch of your own repo.
 - **No laptop required.** The full pipeline from user report to merged fix can run without touching a laptop.
 
@@ -249,7 +249,7 @@ Also required: **Settings → Actions → General → tick "Allow GitHub Actions
 
 | Secret | Purpose |
 |---|---|
-| `ANTHROPIC_API_KEY` | Claude API key for triage and apply-fix |
+| `ANTHROPIC_API_KEY` | Claude API key for triage and apply-fix. Not needed when using workload identity federation (see below) |
 | `NTFY_TOPIC` | NTFY topic — accepts a plain slug (`my-topic`), a host/path (`ntfy.example.com/my-topic`), or a full URL (`https://ntfy.sh/my-topic`) |
 | `WEBHOOK_SECRET` | Shared secret for the Worker `/webhook/apply-fix` endpoint |
 | `BUGPILOT_WORKER_URL` | Deployed Worker base URL — wires the 🟢 Approve NTFY button |
@@ -268,6 +268,53 @@ Also required: **Settings → Actions → General → tick "Allow GitHub Actions
 |---|---|---|
 | `ALLOWED_ORIGIN` | `*` | CORS allowed origin(s). Accepts a single origin or a comma-separated list (e.g. `https://www.example.com,https://app.example.com`). |
 | `APPLY_FIX_WORKFLOW` | `apply-fix.yml` | Filename of the apply-fix workflow the Worker dispatches when 🟢 Approve is tapped. Change this if you name your workflow differently. |
+
+## Using workload identity federation
+
+Both actions can authenticate to the Claude API with a short-lived token minted from the GitHub Actions OIDC token, so the consumer repo holds no `ANTHROPIC_API_KEY` at all. The action requests a GitHub OIDC token with audience `https://api.anthropic.com`, exchanges it at `POST https://api.anthropic.com/v1/oauth/token` (RFC 7523 `jwt-bearer` grant, done by the Anthropic SDK in-process) and uses the resulting `sk-ant-oat01-...` token, refreshing it before expiry. A fresh GitHub token is fetched on every exchange because Anthropic treats each `jti` as single-use.
+
+**Claude Console steps** (Settings, Workload identity, Connect workload, GitHub Actions tile; you need the admin or owner role):
+
+1. **Federation issuer:** issuer URL `https://token.actions.githubusercontent.com`, JWKS source `discovery`.
+2. **Service account:** create one (`svac_...`) and add it to the workspace the Actions should bill against.
+3. **Federation rule** (`fdrl_...`): pin it to the repository and the branch, not just the owner. The `sub` claim of a triage run (an `issues` event on the default branch) is `repo:<owner>/<repo>:ref:refs/heads/main`, and so is an apply-fix `workflow_dispatch` run from main.
+
+   ```json
+   {
+     "match": {
+       "subject_prefix": "repo:your-org/your-repo:ref:refs/heads/main",
+       "audience": "https://api.anthropic.com",
+       "claims": { "repository": "your-org/your-repo", "ref": "refs/heads/main", "repository_owner": "your-org" }
+     },
+     "target": { "type": "service_account", "service_account_id": "svac_..." },
+     "oauth_scope": "workspace:developer",
+     "token_lifetime_seconds": 600
+   }
+   ```
+
+   A rule matching `repo:your-org/*` with no `ref` claim would also match pull-request runs from forks, which means anyone who can open a PR could mint a token. Keep it pinned.
+4. Note the organisation ID (Settings, Organization), the rule ID and the service account ID. None of them is a secret; store them as repository **variables**.
+
+**Consumer workflow.** Grant `id-token: write` and pass the three IDs. Leave `anthropic-api-key` out (or empty) once federation works; if it is set alongside the federation inputs the action still uses federation, and a partial set of federation inputs is an error rather than a silent fallback to the key.
+
+```yaml
+permissions:
+  contents: read
+  issues: write
+  id-token: write
+
+steps:
+  - uses: rodlunt/bugpilot/actions/triage@v1
+    with:
+      anthropic-federation-rule-id: ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }}
+      anthropic-organization-id: ${{ vars.ANTHROPIC_ORGANIZATION_ID }}
+      anthropic-service-account-id: ${{ vars.ANTHROPIC_SERVICE_ACCOUNT_ID }}
+      # anthropic-workspace-id: ${{ vars.ANTHROPIC_WORKSPACE_ID }}  # only if the rule spans workspaces
+```
+
+The apply-fix action takes the same inputs and also needs `id-token: write` on its job. Once BR360 and Groundwork are on federation, delete `ANTHROPIC_API_KEY` from each repo's secrets and then from the Console (Settings, API keys).
+
+**Troubleshooting.** A denied exchange is an opaque `401 Authentication failed`; the reason (usually `match_subject_prefix` when the `sub` format differs from the rule) is on the Console's authentication history page. An empty OIDC token means the job is missing `id-token: write`.
 
 ## Licence
 

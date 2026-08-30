@@ -4,7 +4,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import fs from 'fs'
 import path from 'path'
 import { execSync, execFileSync } from 'child_process'
-import { safePath, ntfyServerAndTopic, houseStyle } from './lib.mjs'
+import { safePath, ntfyServerAndTopic, houseStyle, buildAnthropicClientOptions } from './lib.mjs'
 
 const REPO_ROOT = process.cwd()
 const MAX_ITERATIONS = 20
@@ -33,7 +33,17 @@ House style for the report_done summary (it becomes the commit message, PR title
 
 async function run() {
   const issueNumber = parseInt(core.getInput('issue-number', { required: true }), 10)
-  const apiKey = core.getInput('anthropic-api-key', { required: true })
+  const auth = buildAnthropicClientOptions(
+    {
+      apiKey: core.getInput('anthropic-api-key'),
+      federationRuleId: core.getInput('anthropic-federation-rule-id'),
+      organizationId: core.getInput('anthropic-organization-id'),
+      serviceAccountId: core.getInput('anthropic-service-account-id'),
+      workspaceId: core.getInput('anthropic-workspace-id'),
+    },
+    { getIDToken: core.getIDToken },
+  )
+  core.info(`Anthropic auth: ${auth.mode}`)
   const token = core.getInput('github-token')
   const model = core.getInput('model') || 'claude-sonnet-4-6'
   const ntfyTopic = core.getInput('ntfy-topic')
@@ -57,7 +67,7 @@ async function run() {
   const prompt = buildPrompt(issue, triageComment)
 
   core.info('Running Claude agentic loop for fix implementation...')
-  const client = new Anthropic({ apiKey })
+  const client = new Anthropic(auth.options)
   const legitimateWrites = new Set()
   const result = await runAgenticLoop(client, model, prompt, legitimateWrites)
 

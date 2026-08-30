@@ -1,7 +1,7 @@
 import * as core from '@actions/core'
 import * as github from '@actions/github'
 import Anthropic from '@anthropic-ai/sdk'
-import { parseStructuredBlock, buildUserMessage, buildComment, deriveLabels, ntfyServerAndTopic, applyHouseStyle } from './lib.mjs'
+import { parseStructuredBlock, buildUserMessage, buildComment, deriveLabels, ntfyServerAndTopic, applyHouseStyle, buildAnthropicClientOptions } from './lib.mjs'
 
 const SYSTEM_PROMPT = `You are a senior engineer triaging user-submitted bug reports and feature requests.
 You will be given a structured report from bugpilot. Analyse it carefully and call the triage_report tool with your assessment.
@@ -27,7 +27,17 @@ House style for every piece of prose you write (proposed_fix and response_draft)
 - Do not restate the report back at length. Two to four sentences is the normal length for response_draft.`
 
 async function run() {
-  const apiKey = core.getInput('anthropic-api-key', { required: true })
+  const auth = buildAnthropicClientOptions(
+    {
+      apiKey: core.getInput('anthropic-api-key'),
+      federationRuleId: core.getInput('anthropic-federation-rule-id'),
+      organizationId: core.getInput('anthropic-organization-id'),
+      serviceAccountId: core.getInput('anthropic-service-account-id'),
+      workspaceId: core.getInput('anthropic-workspace-id'),
+    },
+    { getIDToken: core.getIDToken },
+  )
+  core.info(`Anthropic auth: ${auth.mode}`)
   const token = core.getInput('github-token')
   const model = core.getInput('model') || 'claude-sonnet-4-6'
 
@@ -62,7 +72,7 @@ async function run() {
     return
   }
 
-  const client = new Anthropic({ apiKey })
+  const client = new Anthropic(auth.options)
 
   const message = await client.messages.create({
     model,

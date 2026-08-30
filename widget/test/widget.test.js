@@ -75,6 +75,15 @@ describe('variant rendering', () => {
 })
 
 describe('tap vs drag', () => {
+  it('pressing the trigger while the dialog is open closes it', () => {
+    const w = init({ variant: 'tab' })
+    const trigger = document.querySelector('.bp-trigger')
+    trigger.click()
+    expect(w._isOpen).toBe(true)
+    trigger.click()
+    expect(w._isOpen).toBe(false)
+  })
+
   it('a tap (movement under the threshold) opens the dialog', () => {
     init({ variant: 'tab' })
     const t = document.querySelector('.bp-trigger')

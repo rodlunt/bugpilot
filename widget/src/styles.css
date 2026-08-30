@@ -32,7 +32,7 @@
   --bp-trigger-shadow: 0 4px 14px var(--bp-primary-shadow, rgba(0, 0, 0, 0.25));
   --bp-tab-size: 36px;
   --bp-tab-hit: 44px;
-  --bp-tab-peek: 4px;
+  --bp-tab-peek: 0px;
   --bp-tab-radius: 0;
   --bp-z-index: 2147483647;
   --bp-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -84,8 +84,9 @@
 
 /* Tab variant: icon-only square docked flush against a viewport edge.
    The button is the 44px hit area (WCAG 2.5.8); the face is the visible
-   36px square. At rest the face tucks --bp-tab-peek under the edge so it
-   reads as a drawer handle; hover, focus and drag slide it fully out. */
+   36px square, fully visible by default so the icon sits centred in it.
+   A host can set --bp-tab-peek to tuck the face under the edge at rest
+   (drawer-handle feel); hover, focus and drag always slide it fully out. */
 .bp-trigger--tab {
   width: var(--bp-tab-hit);
   height: var(--bp-tab-hit);

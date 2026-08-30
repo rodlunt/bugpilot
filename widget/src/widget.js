@@ -356,7 +356,10 @@ export class BugPilotWidget {
   _bind() {
     this._trigger.addEventListener('click', () => {
       if (this._suppressClick) { this._suppressClick = false; return }
-      this.open()
+      // Toggle, not open: the trigger stays reachable above the backdrop,
+      // so a second press on it must close the dialog like the X does.
+      if (this._isOpen) this.close()
+      else this.open()
     })
     if (this._dock) this._bindDock()
     this._dialog.querySelector('#bp-close-btn').addEventListener('click', () => this.close())

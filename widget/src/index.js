@@ -4,7 +4,7 @@ import { BugPilotWidget } from './widget.js'
 // with the git release tag (the repo releases via ./release.sh vX.Y.Z).
 // It is exposed on the BugPilot object and stamped as a build banner so
 // vendored IIFE copies in host sites are identifiable.
-const VERSION = '1.1.0'
+const VERSION = '1.2.0'
 
 let _instance = null
 

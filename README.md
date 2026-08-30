@@ -128,7 +128,7 @@ The widget injects one stylesheet and reads every colour, radius, border, shadow
 | `--bp-tab-size` | `36px` | Visible tab square |
 | `--bp-tab-hit` | `44px` | Tab hit area (WCAG 2.5.8 minimum) |
 | `--bp-tab-peek` | `4px` | How far the tab face tucks under the viewport edge at rest |
-| `--bp-tab-radius` | `8px` | Outer corners of the tab face |
+| `--bp-tab-radius` | `0` | Outer corners of the tab face |
 | `--bp-z-index` | `2147483647` | Stacking of trigger, backdrop and dialog |
 | `--bp-font` | system stack | Font family for all widget text |
 

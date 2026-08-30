@@ -222,8 +222,9 @@ describe('icon option and sanitiser', () => {
     init({ variant: 'tab', icon: '<svg onload="alert(1)"></svg>' })
     const face = document.querySelector('.bp-tab-face')
     expect(face.querySelector('svg').hasAttribute('onload')).toBe(false)
-    // Placeholder ladybird: four spots plus the body circle
-    expect(face.querySelectorAll('circle').length).toBe(5)
+    // Hand-drawn ladybird (candidate 1): a single evenodd path
+    expect(face.querySelectorAll('path').length).toBe(1)
+    expect(face.querySelector('path').getAttribute('fill-rule')).toBe('evenodd')
     expect(warn).toHaveBeenCalledOnce()
     expect(resolveIcon('', 'pill')).toBe(DEFAULT_PILL_ICON)
   })

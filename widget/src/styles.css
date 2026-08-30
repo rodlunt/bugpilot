@@ -33,7 +33,7 @@
   --bp-tab-size: 36px;
   --bp-tab-hit: 44px;
   --bp-tab-peek: 4px;
-  --bp-tab-radius: 8px;
+  --bp-tab-radius: 0;
   --bp-z-index: 2147483647;
   --bp-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }

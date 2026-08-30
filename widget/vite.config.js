@@ -3,7 +3,7 @@ import { resolve } from 'path'
 import { defineConfig } from 'vite'
 
 // Keep in lockstep with VERSION in src/index.js and the git release tag.
-const WIDGET_VERSION = '1.2.1'
+const WIDGET_VERSION = '1.3.1'
 const BANNER = `/* bugpilot-widget v${WIDGET_VERSION} */`
 
 // Prepend the version banner to every built bundle (es, umd, iife) so

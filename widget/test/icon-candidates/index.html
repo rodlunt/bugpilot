@@ -43,10 +43,13 @@
 <body>
   <h1>Tab icon candidates</h1>
   <p class="lead">
-    Four Recraft-generated ladybird glyphs, cleaned to a single <code>currentColor</code> path
+    Recraft-generated ladybird glyphs, cleaned to a single <code>currentColor</code> path
     (viewBox kept, fixed fills and sizes stripped). Each is shown at 20, 36 and 96px on paper
     and on white, plus inside a mock 36px tab. Tick the one to ship and leave comments in the box.
-    Nothing here is wired into the widget: the tab currently uses a hand-drawn placeholder.
+    <code>candidate-1.svg</code> is the current live default in <code>DEFAULT_TAB_ICON</code>;
+    the owner found it too clean, so <code>sketch-1</code> to <code>sketch-4</code> are a second
+    round in a hand-drawn ink style with deliberately imperfect, wobbly linework.
+    Nothing here is wired into the widget beyond the existing default.
   </p>
 
   <div class="grid" id="grid"></div>
@@ -57,7 +60,16 @@
   </p>
 
   <script>
-    const files = ['candidate-1.svg', 'candidate-2.svg', 'candidate-3.svg', 'candidate-4.svg']
+    const files = [
+      ['candidate-1.svg', 'Candidate 1 (current default)'],
+      ['candidate-2.svg', 'Candidate 2'],
+      ['candidate-3.svg', 'Candidate 3'],
+      ['candidate-4.svg', 'Candidate 4'],
+      ['sketch-1.svg', 'Sketch 1'],
+      ['sketch-2.svg', 'Sketch 2'],
+      ['sketch-3.svg', 'Sketch 3'],
+      ['sketch-4.svg', 'Sketch 4'],
+    ]
     const grid = document.getElementById('grid')
     const sizes = [['s20', '20px'], ['s36', '36px'], ['s96', '96px']]
 
@@ -77,12 +89,12 @@
       return d
     }
 
-    files.forEach(async (f, i) => {
+    files.forEach(async ([f, label], i) => {
       const svg = await fetch(f).then((r) => r.text())
       const card = document.createElement('div')
       card.className = 'card'
       const h = document.createElement('h2')
-      h.innerHTML = `<input type="checkbox" id="pick-${i + 1}" /><label for="pick-${i + 1}">Candidate ${i + 1}</label> <code>${f}</code>`
+      h.innerHTML = `<input type="checkbox" id="pick-${i + 1}" /><label for="pick-${i + 1}">${label}</label> <code>${f}</code>`
       card.appendChild(h)
       card.appendChild(swatch('paper', svg))
       card.appendChild(swatch('white', svg))

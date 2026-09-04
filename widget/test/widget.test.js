@@ -74,6 +74,48 @@ describe('variant rendering', () => {
   })
 })
 
+// The hover-face maths itself (computeHoverRgb) is exhaustively unit-tested
+// with literal inputs in test/colour.test.js, including a WCAG contrast
+// proof and a named control against the old, unconditional-towards-white
+// formula. What belongs here is only the DOM wiring: that _applyColor
+// actually calls through and sets a real --bp-primary-hover, and that it
+// degrades safely rather than throwing when the resolved on-primary colour
+// is not available.
+//
+// jsdom does not resolve var() chains in getComputedStyle at all (verified
+// directly: a `color: var(--x)` rule computes to the literal string
+// "var(--x)", not an rgb() value, in this environment), so parseRgbString
+// always sees null here and computeHoverRgb always takes its documented
+// fallback branch (towards white). That fallback is exercised for real by
+// this suite; the on-primary-is-resolved branch is exercised by
+// colour.test.js's direct calls instead, since jsdom cannot produce a
+// resolved value to drive it through the DOM.
+describe('hover face wiring (_applyColor)', () => {
+  it('sets --bp-primary-hover on both the trigger and the dialog when color is a valid hex', () => {
+    const w = init({ color: '#e0e0e0' })
+    const trigger = document.querySelector('.bp-trigger')
+    expect(trigger.style.getPropertyValue('--bp-primary')).toBe('#e0e0e0')
+    expect(trigger.style.getPropertyValue('--bp-primary-hover')).toMatch(/^rgb\(\d+, \d+, \d+\)$/)
+    expect(w._dialog.style.getPropertyValue('--bp-primary-hover')).toBe(trigger.style.getPropertyValue('--bp-primary-hover'))
+  })
+
+  it('is a no-op (no crash, no properties set) when color is missing or malformed', () => {
+    init({ color: 'not-a-colour' })
+    const trigger = document.querySelector('.bp-trigger')
+    expect(trigger.style.getPropertyValue('--bp-primary')).toBe('')
+    BugPilot.destroy()
+    init()
+    expect(document.querySelector('.bp-trigger').style.getPropertyValue('--bp-primary')).toBe('')
+  })
+
+  it('falls back to the towards-white branch when on-primary cannot be resolved (this environment\'s actual, documented case)', () => {
+    init({ color: '#e0e0e0' })
+    const match = /^rgb\((\d+), (\d+), (\d+)\)$/.exec(document.querySelector('.bp-trigger').style.getPropertyValue('--bp-primary-hover'))
+    expect(match, 'control: a value was actually set').not.toBeNull()
+    expect(Number(match[1]), 'towards white means lighter than the base 224').toBeGreaterThan(224)
+  })
+})
+
 describe('tap vs drag', () => {
   it('pressing the trigger while the dialog is open closes it', () => {
     const w = init({ variant: 'tab' })

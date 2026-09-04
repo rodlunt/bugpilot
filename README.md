@@ -124,7 +124,7 @@ The widget injects one stylesheet and reads every colour, radius, border, shadow
 | `--bp-shadow` | `0 10px 40px rgba(0, 0, 0, 0.15)` | Dialog shadow |
 | `--bp-trigger-radius` | `999px` | Pill trigger corners |
 | `--bp-trigger-border-color` | `transparent` | Trigger border colour (pill and tab face); set to `var(--bp-border)` for an ink outline |
-| `--bp-trigger-shadow` | `0 4px 14px var(--bp-primary-shadow, rgba(0, 0, 0, 0.25))` | Trigger shadow (pill and tab face) |
+| `--bp-trigger-shadow` | `0 2px 10px var(--bp-primary-shadow, rgba(0, 0, 0, 0.16))` | Trigger shadow (pill and tab face) |
 | `--bp-tab-size` | `36px` | Visible tab square |
 | `--bp-tab-hit` | `44px` | Tab hit area (WCAG 2.5.8 minimum) |
 | `--bp-tab-peek` | `0px` | How far the tab face tucks under the viewport edge at rest (0 keeps the icon centred) |

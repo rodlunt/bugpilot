@@ -5,8 +5,20 @@ inputs:
     description: 'Issue number to fix'
     required: true
   anthropic-api-key:
-    description: 'Anthropic API key (BYO)'
-    required: true
+    description: 'Anthropic API key. Fallback when the workload identity federation inputs below are not set.'
+    required: false
+  anthropic-federation-rule-id:
+    description: 'Workload identity federation rule ID (fdrl_...). Set together with the organisation and service account IDs, and grant the job id-token: write.'
+    required: false
+  anthropic-organization-id:
+    description: 'Anthropic organisation ID (Console: Settings, Organization). Required with the federation rule ID.'
+    required: false
+  anthropic-service-account-id:
+    description: 'Service account ID (svac_...) the federation rule targets. Required with the federation rule ID.'
+    required: false
+  anthropic-workspace-id:
+    description: 'Workspace ID (wrkspc_...). Only needed when the federation rule covers more than one workspace.'
+    required: false
   github-token:
     description: 'GitHub token with contents:write, issues:write, pull-requests:write'
     default: ${{ github.token }}

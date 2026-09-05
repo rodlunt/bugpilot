@@ -30271,7 +30271,7 @@ class InternalServerError extends APIError {
 
 /***/ }),
 
-/***/ 4221:
+/***/ 8084:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __nccwpck_require__) => {
 
 
@@ -30329,9 +30329,8 @@ const sleep = (ms, signal) => new Promise((resolve) => {
 //# sourceMappingURL=sleep.mjs.map
 // EXTERNAL MODULE: ./node_modules/.pnpm/@anthropic-ai+sdk@0.117.1/node_modules/@anthropic-ai/sdk/internal/errors.mjs
 var errors = __nccwpck_require__(1352);
-;// CONCATENATED MODULE: ./node_modules/.pnpm/@anthropic-ai+sdk@0.117.1/node_modules/@anthropic-ai/sdk/version.mjs
-const VERSION = '0.117.1'; // x-release-please-version
-//# sourceMappingURL=version.mjs.map
+// EXTERNAL MODULE: ./node_modules/.pnpm/@anthropic-ai+sdk@0.117.1/node_modules/@anthropic-ai/sdk/version.mjs
+var version = __nccwpck_require__(2343);
 ;// CONCATENATED MODULE: ./node_modules/.pnpm/@anthropic-ai+sdk@0.117.1/node_modules/@anthropic-ai/sdk/internal/detect-platform.mjs
 // File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
 
@@ -30364,7 +30363,7 @@ const getPlatformProperties = () => {
     if (detectedPlatform === 'deno') {
         return {
             'X-Stainless-Lang': 'js',
-            'X-Stainless-Package-Version': VERSION,
+            'X-Stainless-Package-Version': version/* VERSION */.x,
             'X-Stainless-OS': normalizePlatform(Deno.build.os),
             'X-Stainless-Arch': normalizeArch(Deno.build.arch),
             'X-Stainless-Runtime': 'deno',
@@ -30374,7 +30373,7 @@ const getPlatformProperties = () => {
     if (typeof EdgeRuntime !== 'undefined') {
         return {
             'X-Stainless-Lang': 'js',
-            'X-Stainless-Package-Version': VERSION,
+            'X-Stainless-Package-Version': version/* VERSION */.x,
             'X-Stainless-OS': 'Unknown',
             'X-Stainless-Arch': `other:${EdgeRuntime}`,
             'X-Stainless-Runtime': 'edge',
@@ -30385,7 +30384,7 @@ const getPlatformProperties = () => {
     if (detectedPlatform === 'node') {
         return {
             'X-Stainless-Lang': 'js',
-            'X-Stainless-Package-Version': VERSION,
+            'X-Stainless-Package-Version': version/* VERSION */.x,
             'X-Stainless-OS': normalizePlatform(globalThis.process.platform ?? 'unknown'),
             'X-Stainless-Arch': normalizeArch(globalThis.process.arch ?? 'unknown'),
             'X-Stainless-Runtime': 'node',
@@ -30396,7 +30395,7 @@ const getPlatformProperties = () => {
     if (browserInfo) {
         return {
             'X-Stainless-Lang': 'js',
-            'X-Stainless-Package-Version': VERSION,
+            'X-Stainless-Package-Version': version/* VERSION */.x,
             'X-Stainless-OS': 'Unknown',
             'X-Stainless-Arch': 'unknown',
             'X-Stainless-Runtime': `browser:${browserInfo.browser}`,
@@ -30406,7 +30405,7 @@ const getPlatformProperties = () => {
     // TODO add support for Cloudflare workers, etc.
     return {
         'X-Stainless-Lang': 'js',
-        'X-Stainless-Package-Version': VERSION,
+        'X-Stainless-Package-Version': version/* VERSION */.x,
         'X-Stainless-OS': 'Unknown',
         'X-Stainless-Arch': 'unknown',
         'X-Stainless-Runtime': 'unknown',
@@ -30647,237 +30646,10 @@ const FallbackEncoder = ({ headers, body }) => {
 var utils_query = __nccwpck_require__(4730);
 // EXTERNAL MODULE: ./node_modules/.pnpm/@anthropic-ai+sdk@0.117.1/node_modules/@anthropic-ai/sdk/core/error.mjs
 var core_error = __nccwpck_require__(8899);
-;// CONCATENATED MODULE: ./node_modules/.pnpm/@anthropic-ai+sdk@0.117.1/node_modules/@anthropic-ai/sdk/lib/credentials/types.mjs
-
-const GRANT_TYPE_JWT_BEARER = 'urn:ietf:params:oauth:grant-type:jwt-bearer';
-const GRANT_TYPE_REFRESH_TOKEN = 'refresh_token';
-const TOKEN_ENDPOINT = '/v1/oauth/token';
-/**
- * `anthropic-beta` value required on authenticated API requests using an
- * OAuth bearer token, and on `refresh_token` grants against the token endpoint.
- */
-const OAUTH_API_BETA_HEADER = 'oauth-2025-04-20';
-/**
- * `anthropic-beta` value required on jwt-bearer exchanges against the token
- * endpoint. It routes the request to the federation service; it must NOT be
- * sent on `refresh_token` grants, which are handled by a different backend.
- */
-const FEDERATION_BETA_HEADER = 'oidc-federation-2026-04-01';
-const ADVISORY_REFRESH_THRESHOLD_IN_SECONDS = 120;
-const MANDATORY_REFRESH_THRESHOLD_IN_SECONDS = 30;
-const ADVISORY_REFRESH_BACKOFF_IN_SECONDS = 5;
-const MAX_TOKEN_RESPONSE_BYTES = 1 << 20;
-/**
- * Rejects base URLs that would cause a JWT assertion or refresh token to be
- * sent over cleartext HTTP. Loopback hosts are allowed for local development.
- */
-function requireSecureTokenEndpoint(baseURL) {
-    if (!baseURL)
-        return;
-    let u;
-    try {
-        u = new URL(baseURL);
-    }
-    catch (err) {
-        throw new WorkloadIdentityError(`Invalid token endpoint base URL "${baseURL}": ${err}`);
-    }
-    if (u.protocol === 'https:')
-        return;
-    // WHATWG URL.hostname returns bracketed IPv6 ("[::1]"); Go's net/url strips them.
-    const host = u.hostname.toLowerCase().replace(/^\[|\]$/g, '');
-    if (u.protocol === 'http:' && (host === 'localhost' || host === '127.0.0.1' || host === '::1')) {
-        return;
-    }
-    throw new WorkloadIdentityError(`Refusing to send credential over non-https token endpoint "${baseURL}"`);
-}
-/**
- * Reads the response body as text, parses it as a token-endpoint JSON
- * response, validates `access_token` is present, and rejects a non-Bearer
- * `token_type` when one is provided. Reads at most
- * {@link MAX_TOKEN_RESPONSE_BYTES} from the body stream.
- */
-async function parseTokenResponse(resp, requestId) {
-    const text = await readLimitedText(resp);
-    let data;
-    try {
-        data = JSON.parse(text);
-    }
-    catch {
-        throw new WorkloadIdentityError(`Token endpoint returned non-JSON response (status ${resp.status})`, resp.status, redactSensitive(text), requestId);
-    }
-    if (!data.access_token) {
-        throw new WorkloadIdentityError(`Token endpoint response missing access_token: ${JSON.stringify(redactSensitive(data))}`, resp.status, redactSensitive(data), requestId);
-    }
-    if (data.token_type && data.token_type.toLowerCase() !== 'bearer') {
-        throw new WorkloadIdentityError(`Token endpoint response: unsupported token_type "${data.token_type}" (want Bearer)`, resp.status, redactSensitive(data), requestId);
-    }
-    return data;
-}
-const MAX_ERROR_BODY_CHARS = 2000;
-// RFC 6749 §5.2 standard error-response fields. Anything else in a token
-// endpoint error body is potentially echoed input (assertion, refresh_token,
-// access_token, …) and is dropped rather than allowlisted-with-exceptions.
-const SAFE_ERROR_KEYS = new Set(['error', 'error_description', 'error_uri']);
-/**
- * Returns a redacted copy of a token-endpoint error body for safe inclusion
- * in an exception. Strings are truncated; objects keep only the RFC 6749
- * §5.2 error fields.
- */
-function redactSensitive(body) {
-    if (body == null)
-        return body;
-    if (typeof body === 'string') {
-        let parsed;
-        try {
-            parsed = JSON.parse(body);
-        }
-        catch {
-            if (body.length <= MAX_ERROR_BODY_CHARS)
-                return body;
-            return body.slice(0, MAX_ERROR_BODY_CHARS) + `... <${body.length - MAX_ERROR_BODY_CHARS} more chars>`;
-        }
-        return JSON.stringify(redactSensitive(parsed));
-    }
-    if (typeof body === 'object' && !Array.isArray(body)) {
-        const out = {};
-        for (const [k, v] of Object.entries(body)) {
-            if (SAFE_ERROR_KEYS.has(k))
-                out[k] = v;
-        }
-        return out;
-    }
-    return null;
-}
-/**
- * Best-effort safety check on a credentials file before reading it.
- *
- * On POSIX: resolves symlinks (so containerized deployments that mount the
- * credential as a symlink to a tmpfs-backed file keep working), then rejects
- * the resolved target if it is group- or world- readable or writable. A uid
- * mismatch on the resolved target is surfaced via `onWarn` since
- * root-written/app-read is common in init-container setups. No-op on Windows.
- */
-async function checkCredentialsFileSafety(path, onWarn = (m) => console.warn(`anthropic-sdk: ${m}`)) {
-    if (typeof process === 'undefined' || process.platform === 'win32')
-        return;
-    const fs = await Promise.resolve(/* import() */).then(__nccwpck_require__.t.bind(__nccwpck_require__, 3024, 19));
-    let resolved = path;
-    let st;
-    try {
-        resolved = await fs.promises.realpath(path);
-        st = await fs.promises.stat(resolved);
-    }
-    catch {
-        return; // ENOENT etc — let the subsequent read surface a precise error
-    }
-    const mode = st.mode & 0o777;
-    // 0o022 = group/world write; 0o044 = group/world read.
-    if (mode & 0o022) {
-        throw new WorkloadIdentityError(`Credentials file at ${resolved} is group/world-writable (mode 0o${mode.toString(8)}); ` +
-            `this allows other local users to plant tokens. Run \`chmod 600 ${resolved}\`.`);
-    }
-    if (mode & 0o044) {
-        throw new WorkloadIdentityError(`Credentials file at ${resolved} is group/world-readable (mode 0o${mode.toString(8)}); ` +
-            `run \`chmod 600 ${resolved}\` before retrying.`);
-    }
-    if (typeof process.getuid === 'function' && st.uid !== process.getuid()) {
-        onWarn(`credentials file at ${resolved} is owned by uid ${st.uid} (current process uid ${process.getuid()}); ` + `verify this is intentional.`);
-    }
-}
-/**
- * Atomically writes JSON to `targetPath` via a `.tmp` sibling + rename,
- * with fsync on the file and (best-effort) on the parent directory.
- * Creates the parent directory with mode 0700 and the file with mode 0600.
- */
-async function writeCredentialsFileAtomic(targetPath, data) {
-    const fs = await Promise.resolve(/* import() */).then(__nccwpck_require__.t.bind(__nccwpck_require__, 3024, 19));
-    const path = await Promise.resolve(/* import() */).then(__nccwpck_require__.t.bind(__nccwpck_require__, 6760, 19));
-    const dir = path.dirname(targetPath);
-    await fs.promises.mkdir(dir, { recursive: true, mode: 0o700 });
-    // Unique temp name avoids two concurrent writers (different processes or
-    // SDK instances) racing on the same '.tmp' sibling and corrupting each
-    // other's bytes mid-write before the rename.
-    const tmpPath = `${targetPath}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
-    try {
-        const fh = await fs.promises.open(tmpPath, 'w', 0o600);
-        try {
-            await fh.writeFile(JSON.stringify(data, null, 2));
-            await fh.sync();
-        }
-        finally {
-            await fh.close();
-        }
-        await fs.promises.rename(tmpPath, targetPath);
-    }
-    catch (err) {
-        // Don't leak the temp file if anything between create and rename failed.
-        await fs.promises.unlink(tmpPath).catch(() => { });
-        throw err;
-    }
-    // fsync the parent directory so the rename survives a crash.
-    try {
-        const dirFh = await fs.promises.open(dir, 'r');
-        try {
-            await dirFh.sync();
-        }
-        finally {
-            await dirFh.close();
-        }
-    }
-    catch {
-        // Directory fsync is best-effort (unsupported on some platforms, e.g. Windows).
-    }
-}
-async function readLimitedText(resp) {
-    if (!resp.body) {
-        return '';
-    }
-    const reader = resp.body.getReader();
-    const chunks = [];
-    let received = 0;
-    for (;;) {
-        const { done, value } = await reader.read();
-        if (done)
-            break;
-        if (received + value.length > MAX_TOKEN_RESPONSE_BYTES) {
-            const remaining = MAX_TOKEN_RESPONSE_BYTES - received;
-            if (remaining > 0)
-                chunks.push(value.subarray(0, remaining));
-            await reader.cancel();
-            break;
-        }
-        chunks.push(value);
-        received += value.length;
-    }
-    let merged;
-    if (chunks.length === 1) {
-        merged = chunks[0];
-    }
-    else {
-        merged = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
-        let offset = 0;
-        for (const c of chunks) {
-            merged.set(c, offset);
-            offset += c.length;
-        }
-    }
-    return new TextDecoder('utf-8').decode(merged);
-}
-class WorkloadIdentityError extends core_error/* AnthropicError */.pJ {
-    constructor(message, statusCode = null, body = null, requestId = null) {
-        super(message);
-        this.statusCode = statusCode;
-        this.body = body;
-        this.requestId = requestId;
-    }
-}
-//# sourceMappingURL=types.mjs.map
-;// CONCATENATED MODULE: ./node_modules/.pnpm/@anthropic-ai+sdk@0.117.1/node_modules/@anthropic-ai/sdk/internal/utils/time.mjs
-/** Current time as unix epoch seconds. */
-function nowAsSeconds() {
-    return Math.floor(Date.now() / 1000);
-}
-//# sourceMappingURL=time.mjs.map
+// EXTERNAL MODULE: ./node_modules/.pnpm/@anthropic-ai+sdk@0.117.1/node_modules/@anthropic-ai/sdk/lib/credentials/types.mjs
+var types = __nccwpck_require__(7943);
+// EXTERNAL MODULE: ./node_modules/.pnpm/@anthropic-ai+sdk@0.117.1/node_modules/@anthropic-ai/sdk/internal/utils/time.mjs
+var time = __nccwpck_require__(1276);
 ;// CONCATENATED MODULE: ./node_modules/.pnpm/@anthropic-ai+sdk@0.117.1/node_modules/@anthropic-ai/sdk/lib/credentials/token-cache.mjs
 
 
@@ -30917,11 +30689,11 @@ class TokenCache {
         if (cached.expiresAt == null) {
             return cached.token;
         }
-        const remaining = cached.expiresAt - nowAsSeconds();
-        if (remaining > ADVISORY_REFRESH_THRESHOLD_IN_SECONDS) {
+        const remaining = cached.expiresAt - (0,time/* nowAsSeconds */.k)();
+        if (remaining > types/* ADVISORY_REFRESH_THRESHOLD_IN_SECONDS */.A_) {
             return cached.token;
         }
-        if (remaining > MANDATORY_REFRESH_THRESHOLD_IN_SECONDS) {
+        if (remaining > types/* MANDATORY_REFRESH_THRESHOLD_IN_SECONDS */.Un) {
             this.backgroundRefresh();
             return cached.token;
         }
@@ -30960,11 +30732,11 @@ class TokenCache {
         if (this.pendingRefresh) {
             return;
         }
-        if (nowAsSeconds() - this.lastAdvisoryError < ADVISORY_REFRESH_BACKOFF_IN_SECONDS) {
+        if ((0,time/* nowAsSeconds */.k)() - this.lastAdvisoryError < types/* ADVISORY_REFRESH_BACKOFF_IN_SECONDS */.TY) {
             return;
         }
         this.doRefresh().catch((err) => {
-            this.lastAdvisoryError = nowAsSeconds();
+            this.lastAdvisoryError = (0,time/* nowAsSeconds */.k)();
             // Advisory failure: keep serving the stale cached token, but surface
             // the error to the caller-provided hook so it can be logged.
             this.onAdvisoryRefreshError?.(err);
@@ -31305,86 +31077,8 @@ function identityTokenFromValue(token) {
     return () => token;
 }
 //# sourceMappingURL=identity-token.mjs.map
-;// CONCATENATED MODULE: ./node_modules/.pnpm/@anthropic-ai+sdk@0.117.1/node_modules/@anthropic-ai/sdk/lib/credentials/oidc-federation.mjs
-
-
-
-/**
- * Exchanges an external OIDC JWT for an Anthropic access token via the
- * RFC 7523 jwt-bearer grant.
- *
- * Each invocation performs a fresh token exchange. Wrap in a
- * {@link TokenCache} to avoid exchanging on every request.
- *
- * Federation grants do not return a refresh token — callers re-exchange
- * their assertion on expiry.
- */
-function oidcFederationProvider(config) {
-    return async () => {
-        requireSecureTokenEndpoint(config.baseURL);
-        const jwt = await config.identityTokenProvider();
-        // The token endpoint enforces a 16 KiB assertion limit; surface a clear
-        // client-side error so misconfigured projected-token sources are
-        // diagnosable without a server round-trip.
-        if (jwt.length > 16 * 1024) {
-            throw new WorkloadIdentityError(`Identity token is ${Math.ceil(jwt.length / 1024)} KiB, exceeds the 16 KiB assertion limit`);
-        }
-        const body = {
-            grant_type: GRANT_TYPE_JWT_BEARER,
-            assertion: jwt,
-            federation_rule_id: config.federationRuleId,
-            organization_id: config.organizationId,
-        };
-        if (config.serviceAccountId) {
-            body['service_account_id'] = config.serviceAccountId;
-        }
-        if (config.workspaceId) {
-            body['workspace_id'] = config.workspaceId;
-        }
-        const url = `${config.baseURL}${TOKEN_ENDPOINT}`;
-        let resp;
-        try {
-            resp = await config.fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'anthropic-beta': `${OAUTH_API_BETA_HEADER},${FEDERATION_BETA_HEADER}`,
-                    'User-Agent': config.userAgent || `anthropic-sdk-typescript/${VERSION} oidcFederationProvider`,
-                },
-                body: JSON.stringify(body),
-            });
-        }
-        catch (err) {
-            throw new WorkloadIdentityError(`Failed to reach token endpoint ${url}: ${err}`);
-        }
-        const requestId = resp.headers.get('Request-Id');
-        if (!resp.ok) {
-            const text = await resp.text().catch(() => '');
-            const redacted = redactSensitive(text);
-            // A 401 is hard to debug from the status code alone, so surface
-            // guidance: check the federation rule, optionally set a workspace ID
-            // (the most common fix when no workspaceId is configured), and point at
-            // the Workload identity page in Claude Console for the server-side
-            // authentication event log. Other statuses (5xx, 400, ...) get no hint.
-            let hint = '';
-            if (resp.status === 401) {
-                const hintMiddle = config.workspaceId ? '' : ("If your federation rule is scoped to multiple workspaces, set the ANTHROPIC_WORKSPACE_ID environment variable, the 'workspace_id' config key, or the `workspaceId` option. ");
-                hint = ` Ensure your federation rule matches your identity token. ${hintMiddle}View your authentication events in the Workload identity page of Claude Console for more details.`;
-            }
-            throw new WorkloadIdentityError(`Token exchange failed with status ${resp.status}${requestId ? ` (request-id ${requestId})` : ''}: ${redacted}${hint}`, resp.status, redacted, requestId);
-        }
-        const data = await parseTokenResponse(resp, requestId);
-        const expiresIn = Number(data.expires_in);
-        if (!Number.isFinite(expiresIn)) {
-            throw new WorkloadIdentityError(`Token endpoint response missing required fields: ${JSON.stringify(redactSensitive(data))}`, resp.status, redactSensitive(data), requestId);
-        }
-        return {
-            token: data.access_token,
-            expiresAt: nowAsSeconds() + expiresIn,
-        };
-    };
-}
-//# sourceMappingURL=oidc-federation.mjs.map
+// EXTERNAL MODULE: ./node_modules/.pnpm/@anthropic-ai+sdk@0.117.1/node_modules/@anthropic-ai/sdk/lib/credentials/oidc-federation.mjs
+var oidc_federation = __nccwpck_require__(3947);
 ;// CONCATENATED MODULE: ./node_modules/.pnpm/@anthropic-ai+sdk@0.117.1/node_modules/@anthropic-ai/sdk/lib/credentials/user-oauth.mjs
 
 
@@ -31402,73 +31096,73 @@ function oidcFederationProvider(config) {
 function userOAuthProvider(config) {
     return async (opts) => {
         const fs = await Promise.resolve(/* import() */).then(__nccwpck_require__.t.bind(__nccwpck_require__, 3024, 19));
-        await checkCredentialsFileSafety(config.credentialsPath, config.onSafetyWarning);
+        await (0,types/* checkCredentialsFileSafety */.dH)(config.credentialsPath, config.onSafetyWarning);
         let raw;
         try {
             raw = await fs.promises.readFile(config.credentialsPath, 'utf-8');
         }
         catch (err) {
-            throw new WorkloadIdentityError(`Credentials file not found at ${config.credentialsPath}: ${err}`);
+            throw new types/* WorkloadIdentityError */.ot(`Credentials file not found at ${config.credentialsPath}: ${err}`);
         }
         let creds;
         try {
             creds = JSON.parse(raw);
         }
         catch (err) {
-            throw new WorkloadIdentityError(`Credentials file at ${config.credentialsPath} is not valid JSON: ${err}`);
+            throw new types/* WorkloadIdentityError */.ot(`Credentials file at ${config.credentialsPath} is not valid JSON: ${err}`);
         }
         const accessToken = creds.access_token;
         if (!accessToken) {
-            throw new WorkloadIdentityError(`Credentials file at ${config.credentialsPath} must include 'access_token'`);
+            throw new types/* WorkloadIdentityError */.ot(`Credentials file at ${config.credentialsPath} must include 'access_token'`);
         }
         // Return cached token if still fresh (or no expiry info), unless the
         // caller is forcing a refresh after a 401 — then go straight to refresh
         // even if the file's expires_at still looks valid.
         const expiresAt = creds.expires_at;
         if (!opts?.forceRefresh &&
-            (expiresAt == null || nowAsSeconds() < expiresAt - MANDATORY_REFRESH_THRESHOLD_IN_SECONDS)) {
+            (expiresAt == null || (0,time/* nowAsSeconds */.k)() < expiresAt - types/* MANDATORY_REFRESH_THRESHOLD_IN_SECONDS */.Un)) {
             return { token: accessToken, expiresAt: expiresAt ?? null };
         }
         const refreshToken = creds.refresh_token;
         if (!config.clientId || !refreshToken) {
-            throw new WorkloadIdentityError(`Access token at ${config.credentialsPath} has expired and no refresh is available ` +
+            throw new types/* WorkloadIdentityError */.ot(`Access token at ${config.credentialsPath} has expired and no refresh is available ` +
                 `(client_id ${config.clientId ? 'set' : 'empty'}, refresh_token ${refreshToken ? 'set' : 'empty'})`);
         }
-        requireSecureTokenEndpoint(config.baseURL);
+        (0,types/* requireSecureTokenEndpoint */.xD)(config.baseURL);
         const body = {
-            grant_type: GRANT_TYPE_REFRESH_TOKEN,
+            grant_type: types/* GRANT_TYPE_REFRESH_TOKEN */.YL,
             refresh_token: refreshToken,
             client_id: config.clientId,
         };
-        const url = `${config.baseURL}${TOKEN_ENDPOINT}`;
+        const url = `${config.baseURL}${types/* TOKEN_ENDPOINT */.uV}`;
         let resp;
         try {
             resp = await config.fetch(url, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'anthropic-beta': OAUTH_API_BETA_HEADER,
-                    'User-Agent': config.userAgent || `anthropic-sdk-typescript/${VERSION} userOAuthProvider`,
+                    'anthropic-beta': types/* OAUTH_API_BETA_HEADER */.E8,
+                    'User-Agent': config.userAgent || `anthropic-sdk-typescript/${version/* VERSION */.x} userOAuthProvider`,
                 },
                 body: JSON.stringify(body),
             });
         }
         catch (err) {
-            throw new WorkloadIdentityError(`User OAuth refresh failed to reach token endpoint: ${err}`);
+            throw new types/* WorkloadIdentityError */.ot(`User OAuth refresh failed to reach token endpoint: ${err}`);
         }
         const requestId = resp.headers.get('Request-Id');
         if (!resp.ok) {
             const text = await resp.text().catch(() => '');
-            throw new WorkloadIdentityError(`User OAuth refresh failed (HTTP ${resp.status}): ${redactSensitive(text)}`, resp.status, redactSensitive(text), requestId);
+            throw new types/* WorkloadIdentityError */.ot(`User OAuth refresh failed (HTTP ${resp.status}): ${(0,types/* redactSensitive */.Qr)(text)}`, resp.status, (0,types/* redactSensitive */.Qr)(text), requestId);
         }
-        const data = await parseTokenResponse(resp, requestId);
+        const data = await (0,types/* parseTokenResponse */.Ac)(resp, requestId);
         const expiresIn = Number(data.expires_in);
         if (!Number.isFinite(expiresIn)) {
-            throw new WorkloadIdentityError(`User OAuth refresh response missing or invalid expires_in: ${JSON.stringify(redactSensitive(data))}`, resp.status, redactSensitive(data), requestId);
+            throw new types/* WorkloadIdentityError */.ot(`User OAuth refresh response missing or invalid expires_in: ${JSON.stringify((0,types/* redactSensitive */.Qr)(data))}`, resp.status, (0,types/* redactSensitive */.Qr)(data), requestId);
         }
-        const newExpiresAt = nowAsSeconds() + expiresIn;
+        const newExpiresAt = (0,time/* nowAsSeconds */.k)() + expiresIn;
         const newRefreshToken = data.refresh_token || refreshToken;
-        await writeCredentialsFileAtomic(config.credentialsPath, {
+        await (0,types/* writeCredentialsFileAtomic */.d2)(config.credentialsPath, {
             ...creds,
             version: CREDENTIALS_FILE_VERSION,
             type: 'oauth_token',
@@ -31552,16 +31246,16 @@ function buildProvider(config, credentialsPath, baseURL, options) {
             const auth = config.authentication;
             const identityProvider = resolveIdentityTokenProvider(auth);
             if (!identityProvider) {
-                throw new WorkloadIdentityError('oidc_federation config requires an identity token (set authentication.identity_token, ' +
+                throw new types/* WorkloadIdentityError */.ot('oidc_federation config requires an identity token (set authentication.identity_token, ' +
                     'ANTHROPIC_IDENTITY_TOKEN_FILE, or ANTHROPIC_IDENTITY_TOKEN)');
             }
             if (!auth.federation_rule_id) {
-                throw new WorkloadIdentityError("oidc_federation config requires 'federation_rule_id'. Set it in authentication.federation_rule_id in your profile, or via ANTHROPIC_FEDERATION_RULE_ID (profile takes precedence).");
+                throw new types/* WorkloadIdentityError */.ot("oidc_federation config requires 'federation_rule_id'. Set it in authentication.federation_rule_id in your profile, or via ANTHROPIC_FEDERATION_RULE_ID (profile takes precedence).");
             }
             if (!config.organization_id) {
-                throw new WorkloadIdentityError('oidc_federation config requires organization_id (set ANTHROPIC_ORGANIZATION_ID or config.organization_id)');
+                throw new types/* WorkloadIdentityError */.ot('oidc_federation config requires organization_id (set ANTHROPIC_ORGANIZATION_ID or config.organization_id)');
             }
-            const exchange = oidcFederationProvider({
+            const exchange = (0,oidc_federation/* oidcFederationProvider */.g)({
                 identityTokenProvider: identityProvider,
                 federationRuleId: auth.federation_rule_id,
                 organizationId: config.organization_id,
@@ -31580,7 +31274,7 @@ function buildProvider(config, credentialsPath, baseURL, options) {
         }
         case 'user_oauth': {
             if (!credentialsPath) {
-                throw new WorkloadIdentityError('user_oauth config requires authentication.credentials_path ' +
+                throw new types/* WorkloadIdentityError */.ot('user_oauth config requires authentication.credentials_path ' +
                     '(or load via a profile so it defaults to <config_dir>/credentials/<profile>.json)');
             }
             return userOAuthProvider({
@@ -31594,7 +31288,7 @@ function buildProvider(config, credentialsPath, baseURL, options) {
         }
         default: {
             const t = config.authentication.type;
-            throw new WorkloadIdentityError(`authentication.type "${t}" is not a known authentication type`);
+            throw new types/* WorkloadIdentityError */.ot(`authentication.type "${t}" is not a known authentication type`);
         }
     }
 }
@@ -31612,10 +31306,10 @@ function resolveIdentityTokenProvider(auth) {
         // the on-disk JSON may contain a source this SDK version doesn't know about.
         const source = auth.identity_token.source;
         if (source !== 'file') {
-            throw new WorkloadIdentityError(`identity_token.source "${source}" is not supported by this SDK version (only "file")`);
+            throw new types/* WorkloadIdentityError */.ot(`identity_token.source "${source}" is not supported by this SDK version (only "file")`);
         }
         if (!auth.identity_token.path) {
-            throw new WorkloadIdentityError(`identity_token.source "file" requires a non-empty path`);
+            throw new types/* WorkloadIdentityError */.ot(`identity_token.source "file" requires a non-empty path`);
         }
         return identityTokenFromFile(auth.identity_token.path);
     }
@@ -31642,7 +31336,7 @@ function resolveIdentityTokenProvider(auth) {
 function cachedExchangeProvider(exchange, credentialsPath, onCacheWriteError, onSafetyWarning) {
     return async (opts) => {
         const fs = await Promise.resolve(/* import() */).then(__nccwpck_require__.t.bind(__nccwpck_require__, 3024, 19));
-        await checkCredentialsFileSafety(credentialsPath, onSafetyWarning);
+        await (0,types/* checkCredentialsFileSafety */.dH)(credentialsPath, onSafetyWarning);
         // Try cached credentials file
         let existing;
         try {
@@ -31651,7 +31345,7 @@ function cachedExchangeProvider(exchange, credentialsPath, onCacheWriteError, on
             const token = existing?.['access_token'];
             if (token && !opts?.forceRefresh) {
                 const expiresAt = existing?.['expires_at'];
-                if (expiresAt == null || nowAsSeconds() < expiresAt - MANDATORY_REFRESH_THRESHOLD_IN_SECONDS) {
+                if (expiresAt == null || (0,time/* nowAsSeconds */.k)() < expiresAt - types/* MANDATORY_REFRESH_THRESHOLD_IN_SECONDS */.Un) {
                     return { token, expiresAt: expiresAt ?? null };
                 }
             }
@@ -31672,7 +31366,7 @@ function cachedExchangeProvider(exchange, credentialsPath, onCacheWriteError, on
         // is shared with a user_oauth profile) so the federation cache writer
         // doesn't clobber material it didn't own.
         try {
-            await writeCredentialsFileAtomic(credentialsPath, {
+            await (0,types/* writeCredentialsFileAtomic */.d2)(credentialsPath, {
                 ...(existing ?? {}),
                 version: CREDENTIALS_FILE_VERSION,
                 type: 'oauth_token',
@@ -40908,7 +40602,7 @@ class BaseAnthropic {
         return (0,utils_query/* stringifyQuery */._)(query);
     }
     getUserAgent() {
-        return `Anthropic/JS ${VERSION}`;
+        return `Anthropic/JS ${version/* VERSION */.x}`;
     }
     defaultIdempotencyKey() {
         return `stainless-node-retry-${uuid4()}`;
@@ -40974,8 +40668,8 @@ class BaseAnthropic {
                 .get('anthropic-beta')
                 ?.split(',')
                 .map((s) => s.trim());
-            if (!existing?.includes(OAUTH_API_BETA_HEADER)) {
-                headers.append('anthropic-beta', OAUTH_API_BETA_HEADER);
+            if (!existing?.includes(types/* OAUTH_API_BETA_HEADER */.E8)) {
+                headers.append('anthropic-beta', types/* OAUTH_API_BETA_HEADER */.E8);
             }
             request.headers = headers;
         }
@@ -43061,6 +42755,20 @@ function stringifyQuery(query) {
 
 /***/ }),
 
+/***/ 1276:
+/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __nccwpck_require__) => {
+
+/* harmony export */ __nccwpck_require__.d(__webpack_exports__, {
+/* harmony export */   k: () => (/* binding */ nowAsSeconds)
+/* harmony export */ });
+/** Current time as unix epoch seconds. */
+function nowAsSeconds() {
+    return Math.floor(Date.now() / 1000);
+}
+//# sourceMappingURL=time.mjs.map
+
+/***/ }),
+
 /***/ 3289:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __nccwpck_require__) => {
 
@@ -43179,6 +42887,344 @@ const pop = (obj, key) => {
 
 /***/ }),
 
+/***/ 3947:
+/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __nccwpck_require__) => {
+
+/* harmony export */ __nccwpck_require__.d(__webpack_exports__, {
+/* harmony export */   g: () => (/* binding */ oidcFederationProvider)
+/* harmony export */ });
+/* harmony import */ var _types_mjs__WEBPACK_IMPORTED_MODULE_0__ = __nccwpck_require__(7943);
+/* harmony import */ var _internal_utils_time_mjs__WEBPACK_IMPORTED_MODULE_2__ = __nccwpck_require__(1276);
+/* harmony import */ var _version_mjs__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(2343);
+
+
+
+/**
+ * Exchanges an external OIDC JWT for an Anthropic access token via the
+ * RFC 7523 jwt-bearer grant.
+ *
+ * Each invocation performs a fresh token exchange. Wrap in a
+ * {@link TokenCache} to avoid exchanging on every request.
+ *
+ * Federation grants do not return a refresh token — callers re-exchange
+ * their assertion on expiry.
+ */
+function oidcFederationProvider(config) {
+    return async () => {
+        (0,_types_mjs__WEBPACK_IMPORTED_MODULE_0__/* .requireSecureTokenEndpoint */ .xD)(config.baseURL);
+        const jwt = await config.identityTokenProvider();
+        // The token endpoint enforces a 16 KiB assertion limit; surface a clear
+        // client-side error so misconfigured projected-token sources are
+        // diagnosable without a server round-trip.
+        if (jwt.length > 16 * 1024) {
+            throw new _types_mjs__WEBPACK_IMPORTED_MODULE_0__/* .WorkloadIdentityError */ .ot(`Identity token is ${Math.ceil(jwt.length / 1024)} KiB, exceeds the 16 KiB assertion limit`);
+        }
+        const body = {
+            grant_type: _types_mjs__WEBPACK_IMPORTED_MODULE_0__/* .GRANT_TYPE_JWT_BEARER */ .Az,
+            assertion: jwt,
+            federation_rule_id: config.federationRuleId,
+            organization_id: config.organizationId,
+        };
+        if (config.serviceAccountId) {
+            body['service_account_id'] = config.serviceAccountId;
+        }
+        if (config.workspaceId) {
+            body['workspace_id'] = config.workspaceId;
+        }
+        const url = `${config.baseURL}${_types_mjs__WEBPACK_IMPORTED_MODULE_0__/* .TOKEN_ENDPOINT */ .uV}`;
+        let resp;
+        try {
+            resp = await config.fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'anthropic-beta': `${_types_mjs__WEBPACK_IMPORTED_MODULE_0__/* .OAUTH_API_BETA_HEADER */ .E8},${_types_mjs__WEBPACK_IMPORTED_MODULE_0__/* .FEDERATION_BETA_HEADER */ .fP}`,
+                    'User-Agent': config.userAgent || `anthropic-sdk-typescript/${_version_mjs__WEBPACK_IMPORTED_MODULE_1__/* .VERSION */ .x} oidcFederationProvider`,
+                },
+                body: JSON.stringify(body),
+            });
+        }
+        catch (err) {
+            throw new _types_mjs__WEBPACK_IMPORTED_MODULE_0__/* .WorkloadIdentityError */ .ot(`Failed to reach token endpoint ${url}: ${err}`);
+        }
+        const requestId = resp.headers.get('Request-Id');
+        if (!resp.ok) {
+            const text = await resp.text().catch(() => '');
+            const redacted = (0,_types_mjs__WEBPACK_IMPORTED_MODULE_0__/* .redactSensitive */ .Qr)(text);
+            // A 401 is hard to debug from the status code alone, so surface
+            // guidance: check the federation rule, optionally set a workspace ID
+            // (the most common fix when no workspaceId is configured), and point at
+            // the Workload identity page in Claude Console for the server-side
+            // authentication event log. Other statuses (5xx, 400, ...) get no hint.
+            let hint = '';
+            if (resp.status === 401) {
+                const hintMiddle = config.workspaceId ? '' : ("If your federation rule is scoped to multiple workspaces, set the ANTHROPIC_WORKSPACE_ID environment variable, the 'workspace_id' config key, or the `workspaceId` option. ");
+                hint = ` Ensure your federation rule matches your identity token. ${hintMiddle}View your authentication events in the Workload identity page of Claude Console for more details.`;
+            }
+            throw new _types_mjs__WEBPACK_IMPORTED_MODULE_0__/* .WorkloadIdentityError */ .ot(`Token exchange failed with status ${resp.status}${requestId ? ` (request-id ${requestId})` : ''}: ${redacted}${hint}`, resp.status, redacted, requestId);
+        }
+        const data = await (0,_types_mjs__WEBPACK_IMPORTED_MODULE_0__/* .parseTokenResponse */ .Ac)(resp, requestId);
+        const expiresIn = Number(data.expires_in);
+        if (!Number.isFinite(expiresIn)) {
+            throw new _types_mjs__WEBPACK_IMPORTED_MODULE_0__/* .WorkloadIdentityError */ .ot(`Token endpoint response missing required fields: ${JSON.stringify((0,_types_mjs__WEBPACK_IMPORTED_MODULE_0__/* .redactSensitive */ .Qr)(data))}`, resp.status, (0,_types_mjs__WEBPACK_IMPORTED_MODULE_0__/* .redactSensitive */ .Qr)(data), requestId);
+        }
+        return {
+            token: data.access_token,
+            expiresAt: (0,_internal_utils_time_mjs__WEBPACK_IMPORTED_MODULE_2__/* .nowAsSeconds */ .k)() + expiresIn,
+        };
+    };
+}
+//# sourceMappingURL=oidc-federation.mjs.map
+
+/***/ }),
+
+/***/ 7943:
+/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __nccwpck_require__) => {
+
+/* harmony export */ __nccwpck_require__.d(__webpack_exports__, {
+/* harmony export */   A_: () => (/* binding */ ADVISORY_REFRESH_THRESHOLD_IN_SECONDS),
+/* harmony export */   Ac: () => (/* binding */ parseTokenResponse),
+/* harmony export */   Az: () => (/* binding */ GRANT_TYPE_JWT_BEARER),
+/* harmony export */   E8: () => (/* binding */ OAUTH_API_BETA_HEADER),
+/* harmony export */   Qr: () => (/* binding */ redactSensitive),
+/* harmony export */   TY: () => (/* binding */ ADVISORY_REFRESH_BACKOFF_IN_SECONDS),
+/* harmony export */   Un: () => (/* binding */ MANDATORY_REFRESH_THRESHOLD_IN_SECONDS),
+/* harmony export */   YL: () => (/* binding */ GRANT_TYPE_REFRESH_TOKEN),
+/* harmony export */   d2: () => (/* binding */ writeCredentialsFileAtomic),
+/* harmony export */   dH: () => (/* binding */ checkCredentialsFileSafety),
+/* harmony export */   fP: () => (/* binding */ FEDERATION_BETA_HEADER),
+/* harmony export */   ot: () => (/* binding */ WorkloadIdentityError),
+/* harmony export */   uV: () => (/* binding */ TOKEN_ENDPOINT),
+/* harmony export */   xD: () => (/* binding */ requireSecureTokenEndpoint)
+/* harmony export */ });
+/* harmony import */ var _core_error_mjs__WEBPACK_IMPORTED_MODULE_0__ = __nccwpck_require__(8899);
+
+const GRANT_TYPE_JWT_BEARER = 'urn:ietf:params:oauth:grant-type:jwt-bearer';
+const GRANT_TYPE_REFRESH_TOKEN = 'refresh_token';
+const TOKEN_ENDPOINT = '/v1/oauth/token';
+/**
+ * `anthropic-beta` value required on authenticated API requests using an
+ * OAuth bearer token, and on `refresh_token` grants against the token endpoint.
+ */
+const OAUTH_API_BETA_HEADER = 'oauth-2025-04-20';
+/**
+ * `anthropic-beta` value required on jwt-bearer exchanges against the token
+ * endpoint. It routes the request to the federation service; it must NOT be
+ * sent on `refresh_token` grants, which are handled by a different backend.
+ */
+const FEDERATION_BETA_HEADER = 'oidc-federation-2026-04-01';
+const ADVISORY_REFRESH_THRESHOLD_IN_SECONDS = 120;
+const MANDATORY_REFRESH_THRESHOLD_IN_SECONDS = 30;
+const ADVISORY_REFRESH_BACKOFF_IN_SECONDS = 5;
+const MAX_TOKEN_RESPONSE_BYTES = 1 << 20;
+/**
+ * Rejects base URLs that would cause a JWT assertion or refresh token to be
+ * sent over cleartext HTTP. Loopback hosts are allowed for local development.
+ */
+function requireSecureTokenEndpoint(baseURL) {
+    if (!baseURL)
+        return;
+    let u;
+    try {
+        u = new URL(baseURL);
+    }
+    catch (err) {
+        throw new WorkloadIdentityError(`Invalid token endpoint base URL "${baseURL}": ${err}`);
+    }
+    if (u.protocol === 'https:')
+        return;
+    // WHATWG URL.hostname returns bracketed IPv6 ("[::1]"); Go's net/url strips them.
+    const host = u.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+    if (u.protocol === 'http:' && (host === 'localhost' || host === '127.0.0.1' || host === '::1')) {
+        return;
+    }
+    throw new WorkloadIdentityError(`Refusing to send credential over non-https token endpoint "${baseURL}"`);
+}
+/**
+ * Reads the response body as text, parses it as a token-endpoint JSON
+ * response, validates `access_token` is present, and rejects a non-Bearer
+ * `token_type` when one is provided. Reads at most
+ * {@link MAX_TOKEN_RESPONSE_BYTES} from the body stream.
+ */
+async function parseTokenResponse(resp, requestId) {
+    const text = await readLimitedText(resp);
+    let data;
+    try {
+        data = JSON.parse(text);
+    }
+    catch {
+        throw new WorkloadIdentityError(`Token endpoint returned non-JSON response (status ${resp.status})`, resp.status, redactSensitive(text), requestId);
+    }
+    if (!data.access_token) {
+        throw new WorkloadIdentityError(`Token endpoint response missing access_token: ${JSON.stringify(redactSensitive(data))}`, resp.status, redactSensitive(data), requestId);
+    }
+    if (data.token_type && data.token_type.toLowerCase() !== 'bearer') {
+        throw new WorkloadIdentityError(`Token endpoint response: unsupported token_type "${data.token_type}" (want Bearer)`, resp.status, redactSensitive(data), requestId);
+    }
+    return data;
+}
+const MAX_ERROR_BODY_CHARS = 2000;
+// RFC 6749 §5.2 standard error-response fields. Anything else in a token
+// endpoint error body is potentially echoed input (assertion, refresh_token,
+// access_token, …) and is dropped rather than allowlisted-with-exceptions.
+const SAFE_ERROR_KEYS = new Set(['error', 'error_description', 'error_uri']);
+/**
+ * Returns a redacted copy of a token-endpoint error body for safe inclusion
+ * in an exception. Strings are truncated; objects keep only the RFC 6749
+ * §5.2 error fields.
+ */
+function redactSensitive(body) {
+    if (body == null)
+        return body;
+    if (typeof body === 'string') {
+        let parsed;
+        try {
+            parsed = JSON.parse(body);
+        }
+        catch {
+            if (body.length <= MAX_ERROR_BODY_CHARS)
+                return body;
+            return body.slice(0, MAX_ERROR_BODY_CHARS) + `... <${body.length - MAX_ERROR_BODY_CHARS} more chars>`;
+        }
+        return JSON.stringify(redactSensitive(parsed));
+    }
+    if (typeof body === 'object' && !Array.isArray(body)) {
+        const out = {};
+        for (const [k, v] of Object.entries(body)) {
+            if (SAFE_ERROR_KEYS.has(k))
+                out[k] = v;
+        }
+        return out;
+    }
+    return null;
+}
+/**
+ * Best-effort safety check on a credentials file before reading it.
+ *
+ * On POSIX: resolves symlinks (so containerized deployments that mount the
+ * credential as a symlink to a tmpfs-backed file keep working), then rejects
+ * the resolved target if it is group- or world- readable or writable. A uid
+ * mismatch on the resolved target is surfaced via `onWarn` since
+ * root-written/app-read is common in init-container setups. No-op on Windows.
+ */
+async function checkCredentialsFileSafety(path, onWarn = (m) => console.warn(`anthropic-sdk: ${m}`)) {
+    if (typeof process === 'undefined' || process.platform === 'win32')
+        return;
+    const fs = await Promise.resolve(/* import() */).then(__nccwpck_require__.t.bind(__nccwpck_require__, 3024, 19));
+    let resolved = path;
+    let st;
+    try {
+        resolved = await fs.promises.realpath(path);
+        st = await fs.promises.stat(resolved);
+    }
+    catch {
+        return; // ENOENT etc — let the subsequent read surface a precise error
+    }
+    const mode = st.mode & 0o777;
+    // 0o022 = group/world write; 0o044 = group/world read.
+    if (mode & 0o022) {
+        throw new WorkloadIdentityError(`Credentials file at ${resolved} is group/world-writable (mode 0o${mode.toString(8)}); ` +
+            `this allows other local users to plant tokens. Run \`chmod 600 ${resolved}\`.`);
+    }
+    if (mode & 0o044) {
+        throw new WorkloadIdentityError(`Credentials file at ${resolved} is group/world-readable (mode 0o${mode.toString(8)}); ` +
+            `run \`chmod 600 ${resolved}\` before retrying.`);
+    }
+    if (typeof process.getuid === 'function' && st.uid !== process.getuid()) {
+        onWarn(`credentials file at ${resolved} is owned by uid ${st.uid} (current process uid ${process.getuid()}); ` + `verify this is intentional.`);
+    }
+}
+/**
+ * Atomically writes JSON to `targetPath` via a `.tmp` sibling + rename,
+ * with fsync on the file and (best-effort) on the parent directory.
+ * Creates the parent directory with mode 0700 and the file with mode 0600.
+ */
+async function writeCredentialsFileAtomic(targetPath, data) {
+    const fs = await Promise.resolve(/* import() */).then(__nccwpck_require__.t.bind(__nccwpck_require__, 3024, 19));
+    const path = await Promise.resolve(/* import() */).then(__nccwpck_require__.t.bind(__nccwpck_require__, 6760, 19));
+    const dir = path.dirname(targetPath);
+    await fs.promises.mkdir(dir, { recursive: true, mode: 0o700 });
+    // Unique temp name avoids two concurrent writers (different processes or
+    // SDK instances) racing on the same '.tmp' sibling and corrupting each
+    // other's bytes mid-write before the rename.
+    const tmpPath = `${targetPath}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
+    try {
+        const fh = await fs.promises.open(tmpPath, 'w', 0o600);
+        try {
+            await fh.writeFile(JSON.stringify(data, null, 2));
+            await fh.sync();
+        }
+        finally {
+            await fh.close();
+        }
+        await fs.promises.rename(tmpPath, targetPath);
+    }
+    catch (err) {
+        // Don't leak the temp file if anything between create and rename failed.
+        await fs.promises.unlink(tmpPath).catch(() => { });
+        throw err;
+    }
+    // fsync the parent directory so the rename survives a crash.
+    try {
+        const dirFh = await fs.promises.open(dir, 'r');
+        try {
+            await dirFh.sync();
+        }
+        finally {
+            await dirFh.close();
+        }
+    }
+    catch {
+        // Directory fsync is best-effort (unsupported on some platforms, e.g. Windows).
+    }
+}
+async function readLimitedText(resp) {
+    if (!resp.body) {
+        return '';
+    }
+    const reader = resp.body.getReader();
+    const chunks = [];
+    let received = 0;
+    for (;;) {
+        const { done, value } = await reader.read();
+        if (done)
+            break;
+        if (received + value.length > MAX_TOKEN_RESPONSE_BYTES) {
+            const remaining = MAX_TOKEN_RESPONSE_BYTES - received;
+            if (remaining > 0)
+                chunks.push(value.subarray(0, remaining));
+            await reader.cancel();
+            break;
+        }
+        chunks.push(value);
+        received += value.length;
+    }
+    let merged;
+    if (chunks.length === 1) {
+        merged = chunks[0];
+    }
+    else {
+        merged = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
+        let offset = 0;
+        for (const c of chunks) {
+            merged.set(c, offset);
+            offset += c.length;
+        }
+    }
+    return new TextDecoder('utf-8').decode(merged);
+}
+class WorkloadIdentityError extends _core_error_mjs__WEBPACK_IMPORTED_MODULE_0__/* .AnthropicError */ .pJ {
+    constructor(message, statusCode = null, body = null, requestId = null) {
+        super(message);
+        this.statusCode = statusCode;
+        this.body = body;
+        this.requestId = requestId;
+    }
+}
+//# sourceMappingURL=types.mjs.map
+
+/***/ }),
+
 /***/ 2047:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __nccwpck_require__) => {
 
@@ -43223,6 +43269,17 @@ class ToolError extends Error {
     }
 }
 //# sourceMappingURL=ToolError.mjs.map
+
+/***/ }),
+
+/***/ 2343:
+/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __nccwpck_require__) => {
+
+/* harmony export */ __nccwpck_require__.d(__webpack_exports__, {
+/* harmony export */   x: () => (/* binding */ VERSION)
+/* harmony export */ });
+const VERSION = '0.117.1'; // x-release-please-version
+//# sourceMappingURL=version.mjs.map
 
 /***/ })
 
@@ -43592,8 +43649,10 @@ function file_command_prepareKeyValueMessage(key, value) {
 const external_path_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("path");
 // EXTERNAL MODULE: external "http"
 var external_http_ = __nccwpck_require__(8611);
+var external_http_namespaceObject = /*#__PURE__*/__nccwpck_require__.t(external_http_, 2);
 // EXTERNAL MODULE: external "https"
 var external_https_ = __nccwpck_require__(5692);
+var external_https_namespaceObject = /*#__PURE__*/__nccwpck_require__.t(external_https_, 2);
 ;// CONCATENATED MODULE: ./node_modules/.pnpm/@actions+http-client@4.0.1/node_modules/@actions/http-client/lib/proxy.js
 function getProxyUrl(reqUrl) {
     const usingSsl = reqUrl.protocol === 'https:';
@@ -43686,7 +43745,7 @@ class DecodedURL extends URL {
 }
 //# sourceMappingURL=proxy.js.map
 // EXTERNAL MODULE: ./node_modules/.pnpm/tunnel@0.0.6/node_modules/tunnel/index.js
-var node_modules_tunnel = __nccwpck_require__(7013);
+var tunnel = __nccwpck_require__(7013);
 // EXTERNAL MODULE: ./node_modules/.pnpm/undici@6.28.0/node_modules/undici/index.js
 var undici = __nccwpck_require__(7305);
 ;// CONCATENATED MODULE: ./node_modules/.pnpm/@actions+http-client@4.0.1/node_modules/@actions/http-client/lib/index.js
@@ -43764,7 +43823,7 @@ const HttpResponseRetryCodes = [
     HttpCodes.ServiceUnavailable,
     HttpCodes.GatewayTimeout
 ];
-const RetryableHttpVerbs = (/* unused pure expression or super */ null && (['OPTIONS', 'GET', 'DELETE', 'HEAD']));
+const RetryableHttpVerbs = ['OPTIONS', 'GET', 'DELETE', 'HEAD'];
 const ExponentialBackoffCeiling = 10;
 const ExponentialBackoffTimeSlice = 5;
 class HttpClientError extends Error {
@@ -43810,7 +43869,7 @@ function isHttps(requestUrl) {
     const parsedUrl = new URL(requestUrl);
     return parsedUrl.protocol === 'https:';
 }
-class lib_HttpClient {
+class HttpClient {
     constructor(userAgent, handlers, requestOptions) {
         this._ignoreSslError = false;
         this._allowRedirects = true;
@@ -44113,7 +44172,7 @@ class lib_HttpClient {
     }
     getAgentDispatcher(serverUrl) {
         const parsedUrl = new URL(serverUrl);
-        const proxyUrl = pm.getProxyUrl(parsedUrl);
+        const proxyUrl = getProxyUrl(parsedUrl);
         const useProxy = proxyUrl && proxyUrl.hostname;
         if (!useProxy) {
             return;
@@ -44124,7 +44183,7 @@ class lib_HttpClient {
         const info = {};
         info.parsedUrl = requestUrl;
         const usingSsl = info.parsedUrl.protocol === 'https:';
-        info.httpModule = usingSsl ? https : http;
+        info.httpModule = usingSsl ? external_https_namespaceObject : external_http_namespaceObject;
         const defaultPort = usingSsl ? 443 : 80;
         info.options = {};
         info.options.host = info.parsedUrl.hostname;
@@ -44223,7 +44282,7 @@ class lib_HttpClient {
     }
     _getAgent(parsedUrl) {
         let agent;
-        const proxyUrl = pm.getProxyUrl(parsedUrl);
+        const proxyUrl = getProxyUrl(parsedUrl);
         const useProxy = proxyUrl && proxyUrl.hostname;
         if (this._keepAlive && useProxy) {
             agent = this._proxyAgent;
@@ -44238,7 +44297,7 @@ class lib_HttpClient {
         const usingSsl = parsedUrl.protocol === 'https:';
         let maxSockets = 100;
         if (this.requestOptions) {
-            maxSockets = this.requestOptions.maxSockets || http.globalAgent.maxSockets;
+            maxSockets = this.requestOptions.maxSockets || external_http_.globalAgent.maxSockets;
         }
         // This is `useProxy` again, but we need to check `proxyURl` directly for TypeScripts's flow analysis.
         if (proxyUrl && proxyUrl.hostname) {
@@ -44263,7 +44322,7 @@ class lib_HttpClient {
         // if tunneling agent isn't assigned create a new agent
         if (!agent) {
             const options = { keepAlive: this._keepAlive, maxSockets };
-            agent = usingSsl ? new https.Agent(options) : new http.Agent(options);
+            agent = usingSsl ? new external_https_.Agent(options) : new external_http_.Agent(options);
             this._agent = agent;
         }
         if (usingSsl && this._ignoreSslError) {
@@ -44286,7 +44345,7 @@ class lib_HttpClient {
             return proxyAgent;
         }
         const usingSsl = parsedUrl.protocol === 'https:';
-        proxyAgent = new ProxyAgent(Object.assign({ uri: proxyUrl.href, pipelining: !this._keepAlive ? 0 : 1 }, ((proxyUrl.username || proxyUrl.password) && {
+        proxyAgent = new undici.ProxyAgent(Object.assign({ uri: proxyUrl.href, pipelining: !this._keepAlive ? 0 : 1 }, ((proxyUrl.username || proxyUrl.password) && {
             token: `Basic ${Buffer.from(`${proxyUrl.username}:${proxyUrl.password}`).toString('base64')}`
         })));
         this._proxyAgentDispatcher = proxyAgent;
@@ -44417,7 +44476,7 @@ class BasicCredentialHandler {
         });
     }
 }
-class auth_BearerCredentialHandler {
+class BearerCredentialHandler {
     constructor(token) {
         this.token = token;
     }
@@ -44475,13 +44534,13 @@ var oidc_utils_awaiter = (undefined && undefined.__awaiter) || function (thisArg
 
 
 
-class oidc_utils_OidcClient {
+class OidcClient {
     static createHttpClient(allowRetry = true, maxRetry = 10) {
         const requestOptions = {
             allowRetries: allowRetry,
             maxRetries: maxRetry
         };
-        return new HttpClient('actions/oidc-client', [new BearerCredentialHandler(oidc_utils_OidcClient.getRequestToken())], requestOptions);
+        return new HttpClient('actions/oidc-client', [new BearerCredentialHandler(OidcClient.getRequestToken())], requestOptions);
     }
     static getRequestToken() {
         const token = process.env['ACTIONS_ID_TOKEN_REQUEST_TOKEN'];
@@ -44500,7 +44559,7 @@ class oidc_utils_OidcClient {
     static getCall(id_token_url) {
         return oidc_utils_awaiter(this, void 0, void 0, function* () {
             var _a;
-            const httpclient = oidc_utils_OidcClient.createHttpClient();
+            const httpclient = OidcClient.createHttpClient();
             const res = yield httpclient
                 .getJson(id_token_url)
                 .catch(error => {
@@ -44519,13 +44578,13 @@ class oidc_utils_OidcClient {
         return oidc_utils_awaiter(this, void 0, void 0, function* () {
             try {
                 // New ID Token is requested from action service
-                let id_token_url = oidc_utils_OidcClient.getIDTokenUrl();
+                let id_token_url = OidcClient.getIDTokenUrl();
                 if (audience) {
                     const encodedAudience = encodeURIComponent(audience);
                     id_token_url = `${id_token_url}&audience=${encodedAudience}`;
                 }
                 debug(`ID token url is ${id_token_url}`);
-                const id_token = yield oidc_utils_OidcClient.getCall(id_token_url);
+                const id_token = yield OidcClient.getCall(id_token_url);
                 setSecret(id_token);
                 return id_token;
             }
@@ -46123,8 +46182,8 @@ function exportVariable(name, val) {
  * console.log(`Using token: ${apiToken}`); // Outputs: "Using token: ***"
  * ```
  */
-function core_setSecret(secret) {
-    issueCommand('add-mask', {}, secret);
+function setSecret(secret) {
+    command_issueCommand('add-mask', {}, secret);
 }
 /**
  * Prepends inputPath to the PATH (for this action and future actions)
@@ -46245,8 +46304,8 @@ function isDebug() {
  * Writes debug message to user log
  * @param message debug message
  */
-function core_debug(message) {
-    issueCommand('debug', {}, message);
+function debug(message) {
+    command_issueCommand('debug', {}, message);
 }
 /**
  * Adds an error issue
@@ -51072,11 +51131,15 @@ function getOctokit(token, options, ...additionalPlugins) {
     return new GitHubWithPlugins(getOctokitOptions(token, options));
 }
 //# sourceMappingURL=github.js.map
-// EXTERNAL MODULE: ./node_modules/.pnpm/@anthropic-ai+sdk@0.117.1/node_modules/@anthropic-ai/sdk/index.mjs + 84 modules
-var sdk = __nccwpck_require__(4221);
+// EXTERNAL MODULE: ./node_modules/.pnpm/@anthropic-ai+sdk@0.117.1/node_modules/@anthropic-ai/sdk/index.mjs + 80 modules
+var sdk = __nccwpck_require__(8084);
+// EXTERNAL MODULE: ./node_modules/.pnpm/@anthropic-ai+sdk@0.117.1/node_modules/@anthropic-ai/sdk/lib/credentials/oidc-federation.mjs
+var oidc_federation = __nccwpck_require__(3947);
 ;// CONCATENATED MODULE: ./lib.mjs
 // Pure helpers, extracted so they can be unit-tested: index.mjs executes
 // run() on import, which makes it untestable directly.
+
+
 
 function parseStructuredBlock(body) {
   if (!body) return null
@@ -51155,6 +51218,111 @@ function ntfyServerAndTopic(topicUrl) {
   return { server: `${u.protocol}//${u.host}`, topic: u.pathname.replace(/^\//, '') }
 }
 
+// House style guard for prose the model produces. The system prompt asks
+// for Australian English, no em or en dashes and no exclamation marks, but
+// the model does not always comply, so the mechanical part is enforced
+// here. A dash is replaced with ", " (a comma or colon rewrite cannot be
+// done mechanically, and a comma reads correctly in almost every case) and
+// a sentence-ending exclamation mark becomes a full stop. Banned words are
+// not rewritten: there is no safe mechanical substitute for a word, so the
+// prompt is the only defence for those.
+function houseStyle(text) {
+  if (typeof text !== 'string') return text
+  return text
+    // A spaced dash ("a — b", "a – b") collapses to a comma with one space.
+    .replace(/\s*[—–]\s*/g, ', ')
+    // A comma we just produced directly after another comma or a colon
+    // is noise: "however, , b" and "note: , b".
+    .replace(/([,:])\s*,\s+/g, '$1 ')
+    // A run of exclamation marks at the end of a sentence becomes one full stop.
+    .replace(/!+(?=\s|$|["')\]])/g, '.')
+}
+
+function applyHouseStyle(triage) {
+  if (!triage || typeof triage !== 'object') return triage
+  const out = { ...triage }
+  for (const key of ['proposed_fix', 'response_draft']) {
+    if (typeof out[key] === 'string') out[key] = houseStyle(out[key])
+  }
+  return out
+}
+
+// Credential resolution: workload identity federation first, API key as
+// the fallback. See README "Using workload identity federation".
+//
+// The four federation inputs travel together. A partial set is a
+// misconfiguration and throws rather than quietly falling back to the key,
+// because a silent fallback is exactly the kind of failure that looks like
+// success (the job goes green on a key the consumer thought they had
+// retired). Only when none of the federation inputs is present does the
+// API key get used, and when that is absent too the action stops.
+
+
+// The audience the GitHub OIDC token is requested with. It must match the
+// federation rule's match.audience in the Claude Console.
+const ANTHROPIC_OIDC_AUDIENCE = 'https://api.anthropic.com'
+
+function resolveAuthMode(inputs) {
+  const federation = {
+    federationRuleId: inputs.federationRuleId || '',
+    organizationId: inputs.organizationId || '',
+    serviceAccountId: inputs.serviceAccountId || '',
+    workspaceId: inputs.workspaceId || '',
+  }
+  const required = ['federationRuleId', 'organizationId', 'serviceAccountId']
+  const present = required.filter((k) => federation[k])
+  if (present.length === required.length) return { mode: 'federation', federation }
+  if (present.length > 0) {
+    const missing = required.filter((k) => !federation[k])
+    throw new Error(
+      `Workload identity federation is partially configured: missing ${missing.join(', ')}. ` +
+        'Supply all of anthropic-federation-rule-id, anthropic-organization-id and anthropic-service-account-id, or none of them.',
+    )
+  }
+  if (inputs.apiKey) return { mode: 'api-key', apiKey: inputs.apiKey }
+  throw new Error(
+    'No Anthropic credentials: set anthropic-api-key, or the three workload identity federation inputs ' +
+      '(and grant the job id-token: write).',
+  )
+}
+
+// Returns the options object to pass to `new Anthropic(...)`. `getIDToken`
+// is @actions/core's getIDToken (injected so tests can stub it) and `fetch`
+// is the fetch the SDK's exchange should use (injected so tests can mock
+// the token endpoint). A fresh GitHub JWT is requested on every exchange:
+// GitHub tokens carry a jti and Anthropic rejects a re-presented one, so
+// caching the JWT across refreshes would break long jobs.
+function buildAnthropicClientOptions(inputs, { getIDToken, fetch: fetchImpl = globalThis.fetch, baseURL } = {}) {
+  const resolved = resolveAuthMode(inputs)
+  if (resolved.mode === 'api-key') return { options: { apiKey: resolved.apiKey }, mode: 'api-key' }
+
+  if (typeof getIDToken !== 'function') {
+    throw new Error('getIDToken is required for workload identity federation')
+  }
+  const f = resolved.federation
+  const apiBase = (baseURL || process.env.ANTHROPIC_BASE_URL || ANTHROPIC_OIDC_AUDIENCE).replace(/\/+$/, '')
+  const credentials = (0,oidc_federation/* oidcFederationProvider */.g)({
+    identityTokenProvider: async () => {
+      const jwt = await getIDToken(ANTHROPIC_OIDC_AUDIENCE)
+      if (!jwt) {
+        throw new Error(
+          'GitHub returned an empty OIDC token. Check the job has `permissions: id-token: write`.',
+        )
+      }
+      return jwt
+    },
+    federationRuleId: f.federationRuleId,
+    organizationId: f.organizationId,
+    serviceAccountId: f.serviceAccountId,
+    workspaceId: f.workspaceId || undefined,
+    baseURL: apiBase,
+    fetch: fetchImpl,
+  })
+  // apiKey: null stops the SDK reading ANTHROPIC_API_KEY from the runner
+  // environment, which would otherwise outrank the credentials provider.
+  return { options: { apiKey: null, credentials }, mode: 'federation' }
+}
+
 ;// CONCATENATED MODULE: ./index.mjs
 
 
@@ -51167,17 +51335,35 @@ You will be given a structured report from bugpilot. Analyse it carefully and ca
 For bugs:
 - Is it reproducible given the information provided?
 - What is the likely root cause?
-- What is the proposed fix? Be specific about what code or behaviour needs to change — one or two sentences, no actual code.
+- What is the proposed fix? Be specific about what code or behaviour needs to change: one or two sentences, no actual code.
 
 For feature requests:
 - Is it feasible and well-defined?
 - What is the effort level?
 - proposed_fix should be null.
 
-Always draft a friendly, human response_draft to post back to the reporter.`
+Always draft a response_draft to post back to the reporter. It is a short reply from a competent engineer: state what was understood from the report and what will happen next. Nothing else.
+
+House style for every piece of prose you write (proposed_fix and response_draft):
+- Australian English spelling (organise, colour, analyse, behaviour, defence).
+- Never use an em dash or an en dash. Use a comma, a colon, a full stop or parentheses instead.
+- Never use the words "honestly", "worth noting", "worth flagging", "worth mentioning" or "load-bearing".
+- Never use "flag" or "flagging" to mean raising or reporting a point ("thanks for flagging", "I want to flag"). Say "reporting" or "raising" if you need the idea at all.
+- Plain register: no exclamation marks, no emoji, no greetings such as "Hi" or "Hey", no thanks, no praise, no encouragement ("keep the feedback coming"), no apologies and no marketing tone.
+- Do not restate the report back at length. Two to four sentences is the normal length for response_draft.`
 
 async function run() {
-  const apiKey = getInput('anthropic-api-key', { required: true })
+  const auth = buildAnthropicClientOptions(
+    {
+      apiKey: getInput('anthropic-api-key'),
+      federationRuleId: getInput('anthropic-federation-rule-id'),
+      organizationId: getInput('anthropic-organization-id'),
+      serviceAccountId: getInput('anthropic-service-account-id'),
+      workspaceId: getInput('anthropic-workspace-id'),
+    },
+    { getIDToken: getIDToken },
+  )
+  info(`Anthropic auth: ${auth.mode}`)
   const token = getInput('github-token')
   const model = getInput('model') || 'claude-sonnet-4-6'
 
@@ -51188,7 +51374,7 @@ async function run() {
 
   const labelNames = issue.labels.map((l) => l.name)
   if (!labelNames.includes('user-feedback')) {
-    info('No user-feedback label — skipping')
+    info('No user-feedback label, skipping')
     return
   }
 
@@ -51196,13 +51382,13 @@ async function run() {
   const issueUrl = `https://github.com/${owner}/${repo}/issues/${issue.number}`
   info(`Triaging issue #${issue.number} (type: ${structured?.type ?? 'unknown'})`)
 
-  // Feature requests don't need AI triage — just acknowledge and notify
+  // Feature requests do not need AI triage: acknowledge and notify
   if (structured?.type === 'feature' || labelNames.includes('enhancement')) {
     await octokit.rest.issues.createComment({
       owner,
       repo,
       issue_number: issue.number,
-      body: `### Feature request logged\n\nThanks for the suggestion — this has been added to the backlog for review. [View issue](${issueUrl})`,
+      body: `### Feature request logged\n\nThis has been added to the backlog for review. [View issue](${issueUrl})`,
     })
     const ntfyTopic = getInput('ntfy-topic')
     const ntfyToken = getInput('ntfy-token')
@@ -51212,7 +51398,7 @@ async function run() {
     return
   }
 
-  const client = new sdk/* default */.Ay({ apiKey })
+  const client = new sdk/* default */.Ay(auth.options)
 
   const message = await client.messages.create({
     model,
@@ -51240,7 +51426,7 @@ async function run() {
     return
   }
 
-  const triage = toolUse.input
+  const triage = applyHouseStyle(toolUse.input)
   info(`Triage result: ${JSON.stringify(triage)}`)
 
   await octokit.rest.issues.createComment({
@@ -51286,7 +51472,7 @@ function triageTool() {
         severity: {
           type: 'string',
           enum: ['critical', 'high', 'medium', 'low'],
-          description: 'Bug severity only — omit for features',
+          description: 'Bug severity only. Omit for features.',
         },
         reproducible: {
           type: 'boolean',
@@ -51298,7 +51484,7 @@ function triageTool() {
         },
         response_draft: {
           type: 'string',
-          description: 'Friendly response to post to the reporter',
+          description: 'Short plain-register reply to post to the reporter: what was understood and what will happen next',
         },
       },
     },
@@ -51338,7 +51524,7 @@ async function sendNtfy({ ntfyTopic, ntfyToken, webhookSecret, workerBase, issue
 
   const severityPart = triage.severity ? ` [${triage.severity}]` : ''
   const title = `Bug${severityPart}: ${issue.title.replace(/^\[.*?\]\s*Bug:\s*/, '').slice(0, 80)}`
-  const message = triage.proposed_fix || 'Triage complete — no fix proposed.'
+  const message = triage.proposed_fix || 'Triage complete. No fix proposed.'
 
   const actions = []
 

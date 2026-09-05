@@ -4,7 +4,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import fs from 'fs'
 import path from 'path'
 import { execSync, execFileSync } from 'child_process'
-import { safePath, ntfyServerAndTopic } from './lib.mjs'
+import { safePath, ntfyServerAndTopic, houseStyle, buildAnthropicClientOptions } from './lib.mjs'
 
 const REPO_ROOT = process.cwd()
 const MAX_ITERATIONS = 20
@@ -20,14 +20,30 @@ Your job:
 
 Rules:
 - Read files before modifying them
-- Make the smallest change that fixes the bug — do not refactor unrelated code
+- Make the smallest change that fixes the bug. Do not refactor unrelated code
 - Do not modify package.json, package-lock.json, or any lockfiles
 - Do not modify test files unless the bug is in a test
-- If the issue lacks enough information to implement a fix confidently, explain why in report_done without modifying any files`
+- If the issue lacks enough information to implement a fix confidently, explain why in report_done without modifying any files
+
+House style for the report_done summary (it becomes the commit message, PR title and body, and the issue comment):
+- Australian English spelling (organise, colour, behaviour).
+- Never use an em dash or an en dash. Use a comma, a colon, a full stop or parentheses instead.
+- Never use the words "honestly", "worth noting", "worth flagging" or "load-bearing", and never use "flag" or "flagging" to mean raising a point.
+- Plain register: no exclamation marks, no emoji, no thanks, no praise. State what changed and why.`
 
 async function run() {
   const issueNumber = parseInt(core.getInput('issue-number', { required: true }), 10)
-  const apiKey = core.getInput('anthropic-api-key', { required: true })
+  const auth = buildAnthropicClientOptions(
+    {
+      apiKey: core.getInput('anthropic-api-key'),
+      federationRuleId: core.getInput('anthropic-federation-rule-id'),
+      organizationId: core.getInput('anthropic-organization-id'),
+      serviceAccountId: core.getInput('anthropic-service-account-id'),
+      workspaceId: core.getInput('anthropic-workspace-id'),
+    },
+    { getIDToken: core.getIDToken },
+  )
+  core.info(`Anthropic auth: ${auth.mode}`)
   const token = core.getInput('github-token')
   const model = core.getInput('model') || 'claude-sonnet-4-6'
   const ntfyTopic = core.getInput('ntfy-topic')
@@ -51,7 +67,7 @@ async function run() {
   const prompt = buildPrompt(issue, triageComment)
 
   core.info('Running Claude agentic loop for fix implementation...')
-  const client = new Anthropic({ apiKey })
+  const client = new Anthropic(auth.options)
   const legitimateWrites = new Set()
   const result = await runAgenticLoop(client, model, prompt, legitimateWrites)
 
@@ -78,7 +94,7 @@ async function run() {
     execFileSync('git', ['push', 'origin', '--delete', branchName], { stdio: 'pipe' })
     core.info(`Deleted existing remote branch ${branchName}`)
   } catch {
-    // Branch didn't exist — that's fine
+    // Branch did not exist, which is fine
   }
 
   execFileSync('git', ['checkout', '-b', branchName])
@@ -88,7 +104,7 @@ async function run() {
     try {
       execFileSync('git', ['add', filePath])
     } catch {
-      core.warning(`Could not stage ${filePath} — skipping`)
+      core.warning(`Could not stage ${filePath}, skipping`)
     }
   }
 
@@ -138,7 +154,7 @@ async function run() {
   } catch (err) {
     if (err.status === 403) {
       core.warning(
-        'PR creation blocked — enable "Allow GitHub Actions to create and approve pull requests" in Settings → Actions → General.',
+        'PR creation blocked. Enable "Allow GitHub Actions to create and approve pull requests" in Settings → Actions → General.',
       )
     } else {
       throw err
@@ -154,7 +170,7 @@ async function run() {
       ? [
           '### bugpilot apply-fix',
           '',
-          '**Status:** Fix implemented — PR ready for review.',
+          '**Status:** Fix implemented. PR ready for review.',
           `**Branch:** \`${branchName}\``,
           `**Files changed:** ${stagedFiles.split('\n').length}`,
           '',
@@ -165,7 +181,7 @@ async function run() {
       : [
           '### bugpilot apply-fix',
           '',
-          '**Status:** Fix committed to branch — open a PR manually.',
+          '**Status:** Fix committed to branch. Open a PR manually.',
           `**Branch:** \`${branchName}\``,
           `**Files changed:** ${stagedFiles.split('\n').length}`,
           '',
@@ -213,7 +229,7 @@ async function runAgenticLoop(client, model, prompt, legitimateWrites) {
           },
         ],
       })
-      return { summary: doneCall.input.summary }
+      return { summary: houseStyle(doneCall.input.summary) }
     }
 
     if (response.stop_reason === 'end_turn') {
@@ -222,7 +238,7 @@ async function runAgenticLoop(client, model, prompt, legitimateWrites) {
         .map((b) => b.text)
         .join('\n')
         .trim()
-      return { summary: text.slice(0, 300) || 'Fix implemented' }
+      return { summary: houseStyle(text.slice(0, 300)) || 'Fix implemented' }
     }
 
     const toolUses = response.content.filter((b) => b.type === 'tool_use')
@@ -232,7 +248,7 @@ async function runAgenticLoop(client, model, prompt, legitimateWrites) {
         .map((b) => b.text)
         .join('\n')
         .trim()
-      return { summary: text.slice(0, 300) || 'Fix implemented' }
+      return { summary: houseStyle(text.slice(0, 300)) || 'Fix implemented' }
     }
 
     messages.push({ role: 'assistant', content: response.content })
@@ -367,7 +383,7 @@ function buildTools() {
 
 function buildPrompt(issue, triageComment) {
   const parts = [
-    `## Bug report — Issue #${issue.number}`,
+    `## Bug report: Issue #${issue.number}`,
     '',
     `**Title:** ${issue.title}`,
     '',

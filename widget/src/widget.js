@@ -4,6 +4,7 @@ import cssText from './styles.css?inline'
 import { resolveIcon } from './icon.js'
 import { DragTracker, SIDES, defaultY, readDock, writeDock } from './dock.js'
 import { sanitiseUser } from './user.js'
+import { parseRgbString, computeHoverRgb } from './colour.js'
 
 const BUG_CATEGORIES = [
   'UI / Visual issue',
@@ -53,14 +54,23 @@ export class BugPilotWidget {
     const r = parseInt(color.slice(1, 3), 16)
     const g = parseInt(color.slice(3, 5), 16)
     const b = parseInt(color.slice(5, 7), 16)
-    // Hover: blend 15% towards white (lighten)
-    const hr = Math.min(255, Math.round(r + (255 - r) * 0.15))
-    const hg = Math.min(255, Math.round(g + (255 - g) * 0.15))
-    const hb = Math.min(255, Math.round(b + (255 - b) * 0.15))
+
+    // Hover face: computeHoverRgb blends away from --bp-on-primary's own
+    // lightness rather than unconditionally towards white (colour.js has
+    // the full reasoning and is where this is unit-tested; the DOM part
+    // below is deliberately thin). Read via the trigger's own computed
+    // `color` (a real CSS property, whose value getComputedStyle always
+    // fully resolves through any var() chain) rather than reading
+    // --bp-on-primary as a custom property directly, which is not
+    // guaranteed to have its own var() chain substituted when read back
+    // that way, even when the host's override is itself a var() reference.
+    const onPrimary = parseRgbString(getComputedStyle(this._trigger).color)
+    const { r: hr, g: hg, b: hb } = computeHoverRgb({ r, g, b }, onPrimary)
+
     for (const el of [this._trigger, this._dialog]) {
       el.style.setProperty('--bp-primary', color)
       el.style.setProperty('--bp-primary-hover', `rgb(${hr}, ${hg}, ${hb})`)
-      el.style.setProperty('--bp-primary-shadow', `rgba(${r}, ${g}, ${b}, 0.45)`)
+      el.style.setProperty('--bp-primary-shadow', `rgba(${r}, ${g}, ${b}, 0.32)`)
       el.style.setProperty('--bp-primary-soft', `rgba(${r}, ${g}, ${b}, 0.06)`)
     }
   }

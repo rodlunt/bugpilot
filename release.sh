@@ -17,4 +17,10 @@ git diff --cached --quiet || git commit -m "chore: rebuild action bundles for $V
 git tag "$VERSION"
 git push origin main "$VERSION"
 
-echo "Done. GitHub Actions will create the release and update the major tag."
+# The tag push above triggers .github/workflows/update-major-tag.yml, which is where the
+# release actually gets cut (gh release create) and where the major tag gets moved. SBOM
+# generation lives there too, not here: the release doesn't exist yet at this point, so there
+# is nothing to attach a file to until that workflow runs, and its CI runner is the reproducible
+# place to regenerate a CycloneDX SBOM per shipped package (widget, actions/triage,
+# actions/apply-fix) rather than trusting whatever's on a developer's machine.
+echo "Done. GitHub Actions will create the release (with SBOMs attached) and update the major tag."

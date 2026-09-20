@@ -13,11 +13,32 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          version: 11.1.2
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+
+      - name: Generate SBOMs
+        run: |
+          set -e
+          for pkg in widget actions/triage actions/apply-fix; do
+            name=$(echo "$pkg" | tr '/' '-')
+            echo "Generating CycloneDX SBOM for $pkg..."
+            (cd "$pkg" && pnpm dlx @cyclonedx/cdxgen -t js -o "$GITHUB_WORKSPACE/bugpilot-${name}.cdx.json" .)
+          done
+
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
-        run: gh release create "$TAG" --title "$TAG" --generate-notes
+        run: |
+          gh release create "$TAG" --title "$TAG" --generate-notes \
+            bugpilot-widget.cdx.json \
+            bugpilot-actions-triage.cdx.json \
+            bugpilot-actions-apply-fix.cdx.json
 
       - name: Move major version tag
         env:

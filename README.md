@@ -333,6 +333,12 @@ The apply-fix action takes the same inputs and also needs `id-token: write` on i
 
 **Troubleshooting.** A denied exchange is an opaque `401 Authentication failed`; the reason (usually `match_subject_prefix` when the `sub` format differs from the rule) is on the Console's authentication history page. An empty OIDC token means the job is missing `id-token: write`.
 
+## Security
+
+[SECURITY.md](./SECURITY.md) covers how to report a vulnerability. [THREAT_MODEL.md](./THREAT_MODEL.md)
+covers the four trust boundaries this system crosses and which risks are mitigated versus
+knowingly accepted.
+
 ## Licence
 
 [MIT](./LICENSE)

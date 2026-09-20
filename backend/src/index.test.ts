@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { submissionSchema, buildTitle, buildIssueBody, neutraliseMarkers } from './index'
+import { submissionSchema, buildTitle, buildIssueBody, neutraliseMarkers, verifyApprovalToken } from './index'
 
 // A payload shaped exactly like what the widget sends, extras included.
 function widgetPayload(overrides: Record<string, unknown> = {}) {
@@ -98,6 +98,55 @@ describe('buildTitle', () => {
     const title = buildTitle(body)
     expect(title.startsWith('[Test Harness] Bug: ')).toBe(true)
     expect(title).toContain('a'.repeat(72) + '…')
+  })
+})
+
+// Issue #60: the /webhook/apply-fix endpoint used to trust a raw shared
+// secret sent verbatim in the NTFY Approve action's headers, which made the
+// secret legible to anyone who could read the NTFY topic. It now verifies a
+// signed, expiring, issue-scoped token instead (see actions/triage/lib.mjs
+// signApprovalToken for the minting side and the wire-format comment
+// there). This file's implementation is independent of that one (Node 20
+// action runtime vs Cloudflare Workers runtime), so the fixture token below
+// was minted by the actual action-side signApprovalToken() with fixed
+// inputs and pinned here as a literal: if the two implementations ever
+// silently drift apart (a byte order change, a different HMAC key encoding,
+// a JSON key reorder), this is the test that catches it, because nothing
+// else cross-checks them against each other.
+describe('verifyApprovalToken', () => {
+  const secret = 'cross-impl-test-secret'
+  // Minted via: signApprovalToken({ webhookSecret: 'cross-impl-test-secret',
+  // owner: 'rodlunt', repo: 'br360', issueNumber: 42,
+  // now: 1_700_000_000_000, ttlSeconds: 172800 })
+  const fixtureToken = 'eyJvIjoicm9kbHVudCIsInIiOiJicjM2MCIsIm4iOjQyLCJleHAiOjE3MDAxNzI4MDB9.a20zIGikuhAr1ORIKdGhqIgtat_aHZoyC9pcPzsFlXE'
+
+  it('accepts a token minted by the action-side implementation with matching fields (cross-implementation control)', async () => {
+    const result = await verifyApprovalToken({ token: fixtureToken, webhookSecret: secret, now: 1_700_000_000_000 })
+    expect(result).toEqual({ owner: 'rodlunt', repo: 'br360', issueNumber: 42, exp: 1_700_172_800 })
+  })
+
+  it('rejects the same fixture token once past its minted expiry', async () => {
+    const result = await verifyApprovalToken({ token: fixtureToken, webhookSecret: secret, now: 1_700_172_800_001 })
+    expect(result).toBeNull()
+  })
+
+  it('rejects the fixture token under the wrong secret', async () => {
+    const result = await verifyApprovalToken({ token: fixtureToken, webhookSecret: 'not-the-secret', now: 1_700_000_000_000 })
+    expect(result).toBeNull()
+  })
+
+  it('rejects malformed tokens instead of throwing', async () => {
+    for (const bad of ['', 'no-dot-here', 'a.b.c', 'not-base64!!.zzz']) {
+      expect(await verifyApprovalToken({ token: bad, webhookSecret: secret })).toBeNull()
+    }
+  })
+
+  it('rejects a token whose payload was tampered with after signing', async () => {
+    const [payloadB64, sigB64] = fixtureToken.split('.')
+    const payload = JSON.parse(Buffer.from(payloadB64!, 'base64url').toString())
+    const tamperedPayload = Buffer.from(JSON.stringify({ ...payload, n: 999 })).toString('base64url')
+    const tampered = `${tamperedPayload}.${sigB64}`
+    expect(await verifyApprovalToken({ token: tampered, webhookSecret: secret, now: 1_700_000_000_000 })).toBeNull()
   })
 })
 

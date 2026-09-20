@@ -251,7 +251,7 @@ Also required: **Settings → Actions → General → tick "Allow GitHub Actions
 |---|---|
 | `ANTHROPIC_API_KEY` | Claude API key for triage and apply-fix. Not needed when using workload identity federation (see below) |
 | `NTFY_TOPIC` | NTFY topic — accepts a plain slug (`my-topic`), a host/path (`ntfy.example.com/my-topic`), or a full URL (`https://ntfy.sh/my-topic`) |
-| `WEBHOOK_SECRET` | Shared secret for the Worker `/webhook/apply-fix` endpoint |
+| `WEBHOOK_SECRET` | Shared secret for the Worker `/webhook/apply-fix` endpoint. Never sent to NTFY: the triage action uses it to sign a short-lived, issue-scoped approval token, and the Worker verifies that signature. Rotating it invalidates every approval token already sitting in a phone's notification history. |
 | `BUGPILOT_WORKER_URL` | Deployed Worker base URL — wires the 🟢 Approve NTFY button |
 
 **Worker secrets (set via `wrangler secret put`):**
@@ -261,6 +261,23 @@ Also required: **Settings → Actions → General → tick "Allow GitHub Actions
 | `GITHUB_TOKEN` | Creates issues, commits screenshots, dispatches workflows | Classic PAT: `repo` + `workflow`. Fine-grained: Contents (R/W), Issues (R/W), Actions (R/W) |
 | `GITHUB_REPO` | Target repo as `owner/repo` | — |
 | `WEBHOOK_SECRET` | Same value as the Actions secret above | — |
+
+**Upgrading past the approval-token change.** The triage action and the Worker must be on
+matching versions: the triage action signs the Approve token and the Worker verifies it, and an
+old Worker does not understand the new `x-approval-token` header (nor does a new Worker accept
+the old raw-secret header). Deploy the Worker and bump the triage/apply-fix action tag together.
+
+**NTFY topic exposure.** The 🟢 Approve button's target URL, method and body are visible to
+anyone who can read the NTFY topic: NTFY does not encrypt notification content from itself, and a
+plain topic slug (`ntfy.sh/my-topic`) has no read access control at all, so treat the topic name
+itself as the only thing standing between a stranger and your notifications. `WEBHOOK_SECRET`
+itself is never put in that payload (it signs a 48-hour, issue-scoped approval token instead, so a
+leaked token cannot be replayed against a different issue or reused once it expires), but the
+triage detail (issue title, proposed fix, severity) still goes out unauthenticated on a public
+topic. Use a hard-to-guess topic slug at minimum, and prefer a self-hosted NTFY server with
+[access control](https://docs.ntfy.sh/config/#access-control) on the topic (`ntfy-token` above
+authenticates the *publish* call to such a server; the topic's own ACL is what controls who can
+*read* it) if the triage content itself is sensitive.
 
 **Worker env vars (set in `wrangler.toml` or via `wrangler secret put`):**
 

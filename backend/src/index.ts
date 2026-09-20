@@ -54,6 +54,78 @@ export const submissionSchema = z.object({
 
 type SubmissionPayload = z.infer<typeof submissionSchema>
 
+// Verifies the signed, expiring, issue-scoped approval token the ntfy
+// "Approve" action presents to /webhook/apply-fix. Canonical wire format is
+// defined once in actions/triage/lib.mjs (signApprovalToken /
+// verifyApprovalToken): the two implementations are independent (Node 20
+// action runtime vs Workers runtime) but must produce byte-identical tokens
+// for the same input. index.test.ts pins a token minted by the action-side
+// implementation as a literal fixture so the two cannot silently drift
+// apart (see that file for why the secret is never sent over ntfy at all).
+export interface ApprovalTokenPayload {
+  owner: string
+  repo: string
+  issueNumber: number
+  exp: number
+}
+
+function base64UrlDecode(str: string): Uint8Array {
+  const pad = (4 - (str.length % 4)) % 4
+  const padded = str.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat(pad)
+  const binary = atob(padded)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return bytes
+}
+
+// Never throws: any malformed, forged or expired token comes back as null
+// so the caller can treat it as a flat 401 without its own try/catch.
+export async function verifyApprovalToken(
+  { token, webhookSecret, now = Date.now() }: { token: string; webhookSecret: string; now?: number },
+): Promise<ApprovalTokenPayload | null> {
+  if (!token) return null
+  const parts = token.split('.')
+  if (parts.length !== 2) return null
+  const [payloadB64, sigB64] = parts as [string, string]
+
+  let payload: unknown
+  try {
+    payload = JSON.parse(new TextDecoder().decode(base64UrlDecode(payloadB64)))
+  } catch {
+    return null
+  }
+  if (
+    typeof payload !== 'object' || payload === null ||
+    typeof (payload as Record<string, unknown>).o !== 'string' || !(payload as Record<string, unknown>).o ||
+    typeof (payload as Record<string, unknown>).r !== 'string' || !(payload as Record<string, unknown>).r ||
+    !Number.isInteger((payload as Record<string, unknown>).n) || ((payload as Record<string, unknown>).n as number) <= 0 ||
+    !Number.isInteger((payload as Record<string, unknown>).exp)
+  ) {
+    return null
+  }
+  const p = payload as { o: string; r: string; n: number; exp: number }
+
+  let sigBytes: Uint8Array
+  try {
+    sigBytes = base64UrlDecode(sigB64)
+  } catch {
+    return null
+  }
+
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(webhookSecret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['verify'],
+  )
+  const valid = await crypto.subtle.verify('HMAC', key, sigBytes, new TextEncoder().encode(payloadB64))
+  if (!valid) return null
+  if (Math.floor(now / 1000) >= p.exp) return null
+
+  return { owner: p.o, repo: p.r, issueNumber: p.n, exp: p.exp }
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     // Fail fast on missing configuration with a nameable error. Without this,
@@ -204,42 +276,20 @@ async function handleApplyFix(
     return jsonError('Apply-fix webhook not configured on this worker', 503, corsHeaders)
   }
 
-  const secret = request.headers.get('x-webhook-secret') ?? ''
-  const expected = env.WEBHOOK_SECRET
-  const enc = new TextEncoder()
-  const secretBytes = enc.encode(secret.padEnd(expected.length))
-  const expectedBytes = enc.encode(expected.padEnd(secret.length))
-  const secretsMatch =
-    secret.length === expected.length &&
-    (await crypto.subtle.timingSafeEqual(secretBytes, expectedBytes))
-  if (!secretsMatch) {
-    // A failed secret is the one probe on this worker worth a trace: it is
-    // the sole gate on dispatching the apply-fix workflow.
+  const token = request.headers.get('x-approval-token') ?? ''
+  const approved = token ? await verifyApprovalToken({ token, webhookSecret: env.WEBHOOK_SECRET }) : null
+  if (!approved) {
+    // A missing, forged or expired token is the one probe on this worker
+    // worth a trace: it is the sole gate on dispatching the apply-fix
+    // workflow.
     console.warn(`[bugpilot] webhook auth failure from ${request.headers.get('CF-Connecting-IP') ?? 'unknown ip'}`)
     return jsonError('Unauthorized', 401, corsHeaders)
   }
 
-  let body: { issue_number: unknown; owner: unknown; repo: unknown }
-  try {
-    body = await request.json()
-  } catch {
-    return jsonError('Invalid JSON body', 400, corsHeaders)
-  }
-
-  if (
-    !Number.isInteger(body.issue_number) ||
-    (body.issue_number as number) <= 0 ||
-    typeof body.owner !== 'string' ||
-    typeof body.repo !== 'string' ||
-    !body.owner ||
-    !body.repo
-  ) {
-    return jsonError('Missing or invalid fields: issue_number (positive int), owner, repo', 400, corsHeaders)
-  }
-
-  const issueNumber = body.issue_number as number
-  const owner = body.owner as string
-  const repo = body.repo as string
+  // owner/repo/issueNumber come from the verified token, not from the
+  // request body: the token is the only thing here proven not to have been
+  // forged, so it is the only thing that gets to decide what gets dispatched.
+  const { owner, repo, issueNumber } = approved
 
   const [configOwner, configRepo] = env.GITHUB_REPO.split('/')
   if (owner !== configOwner || repo !== configRepo) {

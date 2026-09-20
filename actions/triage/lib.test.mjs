@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { parseStructuredBlock, buildComment, deriveLabels, ntfyServerAndTopic, buildUserMessage, houseStyle, applyHouseStyle, resolveAuthMode, buildAnthropicClientOptions, ANTHROPIC_OIDC_AUDIENCE } from './lib.mjs'
+import { parseStructuredBlock, buildComment, deriveLabels, ntfyServerAndTopic, buildUserMessage, houseStyle, applyHouseStyle, resolveAuthMode, buildAnthropicClientOptions, ANTHROPIC_OIDC_AUDIENCE, signApprovalToken, verifyApprovalToken, APPROVAL_TOKEN_TTL_SECONDS } from './lib.mjs'
 
 const block = (json) => `<!-- bugpilot:structured\n${json}\nbugpilot:end -->`
 
@@ -216,5 +216,75 @@ describe('buildAnthropicClientOptions', () => {
     const { options } = buildAnthropicClientOptions(FED, { getIDToken: async () => 'jwt', fetch })
     await expect(options.credentials()).rejects.toThrow(/Failed to reach token endpoint/)
     expect(fetch).toHaveBeenCalledTimes(1)
+  })
+})
+
+// Issue #60: the raw webhook secret must never appear in the NTFY Approve
+// action, since the notification payload (including its action headers) is
+// legible to anyone who can read the topic. A signed, expiring, issue-scoped
+// token stands in for it. These tests are the defence for that: the control
+// case proves the secret genuinely never appears in the wire value, and the
+// tamper cases prove the signature actually binds every field it claims to.
+describe('signApprovalToken / verifyApprovalToken', () => {
+  const secret = 'wh-secret-do-not-leak-me'
+  const params = { webhookSecret: secret, owner: 'rodlunt', repo: 'br360', issueNumber: 42 }
+
+  it('round-trips: a freshly signed token verifies and returns the same fields', async () => {
+    const token = await signApprovalToken(params)
+    const result = await verifyApprovalToken({ token, webhookSecret: secret })
+    expect(result).toEqual({ owner: 'rodlunt', repo: 'br360', issueNumber: 42, exp: expect.any(Number) })
+  })
+
+  it('control: the raw secret never appears as a substring of the token sent to NTFY', async () => {
+    const token = await signApprovalToken(params)
+    expect(token).not.toContain(secret)
+    // and not just plain-text: not even the base64url encoding of it, which
+    // would be an equally bad leak dressed up as an encoding.
+    const secretB64 = Buffer.from(secret).toString('base64url')
+    expect(token).not.toContain(secretB64)
+  })
+
+  it('rejects a token signed with a different secret', async () => {
+    const token = await signApprovalToken(params)
+    expect(await verifyApprovalToken({ token, webhookSecret: 'wrong-secret' })).toBeNull()
+  })
+
+  it('rejects a token whose issue number was tampered with after signing', async () => {
+    const token = await signApprovalToken(params)
+    const [payloadB64, sigB64] = token.split('.')
+    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString())
+    const tamperedPayload = Buffer.from(JSON.stringify({ ...payload, n: 999 })).toString('base64url')
+    const tampered = `${tamperedPayload}.${sigB64}`
+    expect(await verifyApprovalToken({ token: tampered, webhookSecret: secret })).toBeNull()
+  })
+
+  it('rejects a token whose owner/repo was tampered with, so a leaked token cannot be redirected to another repo', async () => {
+    const token = await signApprovalToken(params)
+    const [payloadB64, sigB64] = token.split('.')
+    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString())
+    const tamperedPayload = Buffer.from(JSON.stringify({ ...payload, r: 'some-other-repo' })).toString('base64url')
+    const tampered = `${tamperedPayload}.${sigB64}`
+    expect(await verifyApprovalToken({ token: tampered, webhookSecret: secret })).toBeNull()
+  })
+
+  it('rejects an expired token', async () => {
+    const now = Date.now()
+    const token = await signApprovalToken({ ...params, now, ttlSeconds: 10 })
+    const stillValid = await verifyApprovalToken({ token, webhookSecret: secret, now: now + 9_000 })
+    expect(stillValid).not.toBeNull()
+    const expired = await verifyApprovalToken({ token, webhookSecret: secret, now: now + 10_001 })
+    expect(expired).toBeNull()
+  })
+
+  it('defaults to a 48 hour TTL', async () => {
+    expect(APPROVAL_TOKEN_TTL_SECONDS).toBe(60 * 60 * 48)
+  })
+
+  it('rejects malformed tokens instead of throwing: wrong shape, bad base64, non-JSON payload, missing fields', async () => {
+    for (const bad of ['', 'no-dot-here', 'a.b.c', 'not-base64!!.zzz', `${Buffer.from('not json').toString('base64url')}.sig`]) {
+      expect(await verifyApprovalToken({ token: bad, webhookSecret: secret })).toBeNull()
+    }
+    const incomplete = Buffer.from(JSON.stringify({ o: 'rodlunt' })).toString('base64url')
+    expect(await verifyApprovalToken({ token: `${incomplete}.sig`, webhookSecret: secret })).toBeNull()
   })
 })

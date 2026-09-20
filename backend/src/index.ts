@@ -609,9 +609,37 @@ export function neutraliseMarkers(v: string | null | undefined): string | null {
   return v.replace(/bugpilot:(structured|end)/gi, 'bugpilot $1').replace(/-->/g, '--\u200b>')
 }
 
-function jsonError(message: string, status: number, corsHeaders: Record<string, string>): Response {
-  return new Response(JSON.stringify({ ok: false, error: message }), {
-    status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' } ,
-  })
+// RFC 9457 status-text lookup for the "title" member. Only the statuses this
+// worker actually returns (see the jsonError call sites above) — no need for
+// a full HTTP status table.
+const STATUS_TITLES: Record<number, string> = {
+  400: 'Bad Request',
+  401: 'Unauthorized',
+  403: 'Forbidden',
+  413: 'Payload Too Large',
+  500: 'Internal Server Error',
+  502: 'Bad Gateway',
+  503: 'Service Unavailable',
+}
+
+// Emits RFC 9457 (application/problem+json) problem details. `ok` and
+// `error` are kept alongside `type`/`title`/`status`/`detail` for one
+// deprecation cycle: widget/src/widget.js:465 reads `body.error` directly,
+// and this avoids a coupled widget release. Drop them once the widget no
+// longer needs it (bugpilot#64).
+export function jsonError(message: string, status: number, corsHeaders: Record<string, string>): Response {
+  return new Response(
+    JSON.stringify({
+      type: 'about:blank',
+      title: STATUS_TITLES[status] ?? 'Error',
+      status,
+      detail: message,
+      ok: false,
+      error: message,
+    }),
+    {
+      status,
+      headers: { ...corsHeaders, 'Content-Type': 'application/problem+json' },
+    },
+  )
 }

@@ -189,6 +189,17 @@ Contrast of every text/background pair in this theme (WCAG 2.x, AA needs 4.5:1 f
 - **No external CDN required.** Screenshots are stored in a branch of your own repo.
 - **No laptop required.** The full pipeline from user report to merged fix can run without touching a laptop.
 
+## Accessibility
+
+The widget targets **WCAG 2.2 Level AA**. Consumers embedding it in a site with its own
+conformance obligations (ADA, EAA, DDA, depending on jurisdiction) can treat that as the
+baseline to test against.
+
+Known gap: the report dialog does not yet trap focus, return it to the trigger on close, or
+expose the type-picker's selected state via `aria-pressed` ([#67](https://github.com/rodlunt/bugpilot/issues/67)).
+Everything else in the dialog (labelled form controls, keyboard-operable trigger, visible focus
+states) already meets the target; this is the one tracked exception.
+
 ## Status
 
 M1, M2, and M3 complete and working end-to-end.
@@ -332,6 +343,45 @@ steps:
 The apply-fix action takes the same inputs and also needs `id-token: write` on its job. Once BR360 and Groundwork are on federation, delete `ANTHROPIC_API_KEY` from each repo's secrets and then from the Console (Settings, API keys).
 
 **Troubleshooting.** A denied exchange is an opaque `401 Authentication failed`; the reason (usually `match_subject_prefix` when the `sub` format differs from the rule) is on the Console's authentication history page. An empty OIDC token means the job is missing `id-token: write`.
+
+## API
+
+The worker (`backend/`) exposes two endpoints. Both are POST, JSON in and out, and both are
+CORS-gated by `ALLOWED_ORIGIN`.
+
+### `POST /feedback`
+
+The widget's submission endpoint. No auth — the worker accepts anonymous POSTs by design (see
+[Security](#security)); anything sent here becomes a GitHub issue.
+
+Request body:
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `context` | object | yes | `{ url, viewport: {w, h}, userAgent, browser, os, timestamp, timezone?, language?, referrer? }`. Missing this returns a 400 naming the field (see CLAUDE.md gotcha 1) rather than a generic Cloudflare 1101. |
+| `description` | string, 1–10000 chars | yes | |
+| `type` | `"bug"` \| `"feature"` | no | Drives the issue's label: `bug` or `enhancement`. |
+| `user` | object | no | `{ name?, login? }`, each ≤120 chars. Angle brackets stripped. Adds a `**Reporter:**` line to the issue if supplied. |
+| `screenshot` | string | no | Base64 data URI, ≤4MB decoded. Committed to the `bug-report-screenshots` branch, not sent inline. |
+| `projectName` | string, ≤200 chars | no | |
+| `bugCategory`, `expectedBehavior`, `stepsToReproduce`, `frequency`, `impact`, `problemStatement`, `priority` | string | no | All optional context fields, ≤50–10000 chars depending on field. |
+
+Success (`201`):
+```json
+{ "ok": true, "issueUrl": "https://github.com/owner/repo/issues/42", "issueNumber": 42 }
+```
+
+Failure (`400`): `{ "ok": false, "error": "Invalid payload: <field>: <message>; ..." }` — one message per violating field.
+
+### `POST /webhook/apply-fix`
+
+Fired by the ntfy "Approve" notification action, never called directly by the widget or a
+consumer. Requires an `x-approval-token` header: a short-lived, issue-scoped signed token minted
+by the triage action (see [THREAT_MODEL.md](./THREAT_MODEL.md)), not a static secret. A missing,
+forged or expired token returns `401`.
+
+Success (`200`): `{ "ok": true }` — the `apply-fix.yml` workflow has been dispatched for the
+issue bound into the token. Failure to reach GitHub's dispatch API returns `502`.
 
 ## Security
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { submissionSchema, buildTitle, buildIssueBody, neutraliseMarkers, verifyApprovalToken } from './index'
+import { submissionSchema, buildTitle, buildIssueBody, neutraliseMarkers, verifyApprovalToken, jsonError } from './index'
 
 // A payload shaped exactly like what the widget sends, extras included.
 function widgetPayload(overrides: Record<string, unknown> = {}) {
@@ -175,5 +175,30 @@ describe('buildIssueBody', () => {
     const matches = [...md.matchAll(/<!-- bugpilot:structured\n([\s\S]*?)\nbugpilot:end -->/g)]
     expect(matches).toHaveLength(1)
     expect(JSON.parse(matches[0]![1]!).type).toBe('bug')
+  })
+})
+
+describe('jsonError', () => {
+  it('emits RFC 9457 problem details alongside the legacy ok/error shape', async () => {
+    const res = jsonError('description is required', 400, {})
+    expect(res.status).toBe(400)
+    expect(res.headers.get('Content-Type')).toBe('application/problem+json')
+    const body = await res.json() as { type: string; title: string; status: number; detail: string; ok: boolean; error: string }
+    // RFC 9457 members.
+    expect(body.type).toBe('about:blank')
+    expect(body.title).toBe('Bad Request')
+    expect(body.status).toBe(400)
+    expect(body.detail).toBe('description is required')
+    // Legacy shape, kept for widget/src/widget.js:465 (body.error) until the
+    // widget no longer needs it.
+    expect(body.ok).toBe(false)
+    expect(body.error).toBe('description is required')
+  })
+
+  it('falls back to a generic title for a status not in the lookup table', async () => {
+    const res = jsonError('teapot', 418, {})
+    const body = await res.json() as { title: string; status: number }
+    expect(body.title).toBe('Error')
+    expect(body.status).toBe(418)
   })
 })

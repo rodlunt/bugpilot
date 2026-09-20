@@ -1,7 +1,7 @@
 import * as core from '@actions/core'
 import * as github from '@actions/github'
 import Anthropic from '@anthropic-ai/sdk'
-import { parseStructuredBlock, buildUserMessage, buildComment, deriveLabels, ntfyServerAndTopic, applyHouseStyle, buildAnthropicClientOptions } from './lib.mjs'
+import { parseStructuredBlock, buildUserMessage, buildComment, deriveLabels, ntfyServerAndTopic, applyHouseStyle, buildAnthropicClientOptions, signApprovalToken } from './lib.mjs'
 
 const SYSTEM_PROMPT = `You are a senior engineer triaging user-submitted bug reports and feature requests.
 You will be given a structured report from bugpilot. Analyse it carefully and call the triage_report tool with your assessment.
@@ -203,13 +203,18 @@ async function sendNtfy({ ntfyTopic, ntfyToken, webhookSecret, workerBase, issue
   const actions = []
 
   if (workerBase && webhookSecret) {
+    // The raw webhook secret never goes in the notification: the ntfy
+    // "http" action's headers are part of the message published to the
+    // topic, so anything here is legible to anyone who can read that topic.
+    // A signed, expiring, issue-scoped token stands in for it instead. See
+    // lib.mjs (signApprovalToken) for the wire format and why.
+    const approvalToken = await signApprovalToken({ webhookSecret, owner, repo, issueNumber: issue.number })
     actions.push({
       action: 'http',
       label: '🟢 Approve',
       url: `${workerBase}/webhook/apply-fix`,
       method: 'POST',
-      headers: { 'x-webhook-secret': webhookSecret },
-      body: JSON.stringify({ issue_number: issue.number, owner, repo }),
+      headers: { 'x-approval-token': approvalToken },
     })
   } else {
     // Stub until apply-fix Worker endpoint is deployed

@@ -70,6 +70,105 @@ export function deriveLabels(triage) {
   return labels
 }
 
+// Approval tokens for the ntfy "Approve" webhook callback.
+//
+// WEBHOOK_SECRET must never travel through the notification itself: the
+// ntfy "http" action's headers are part of the message payload published to
+// the topic, so anyone who can read that topic (a public ntfy.sh topic has
+// no read control at all) could lift a raw shared secret and replay it
+// against the Worker indefinitely, for any issue. Instead the Approve
+// button carries a signed, expiring, issue-scoped token: HMAC-SHA256 over
+// `{owner, repo, issueNumber, exp}`, keyed by WEBHOOK_SECRET. Leaking the
+// token only buys an attacker a POST that re-runs apply-fix on the one
+// issue it was minted for, and only until it expires: it is never a
+// reusable credential the way the raw secret was.
+//
+// Wire format (canonical; the Worker's independent verify implementation in
+// backend/src/index.ts must produce/accept byte-identical tokens for the
+// same input):
+//   `${base64url(JSON.stringify({o, r, n, exp}))}.${base64url(HMAC-SHA256(webhookSecret, thatPayload))}`
+export const APPROVAL_TOKEN_TTL_SECONDS = 60 * 60 * 48 // 48h: long enough to notice and tap Approve, short enough to bound a leak.
+
+function base64UrlEncode(bytes) {
+  let binary = ''
+  for (const b of bytes) binary += String.fromCharCode(b)
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+function base64UrlDecode(str) {
+  const pad = (4 - (str.length % 4)) % 4
+  const padded = str.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat(pad)
+  const binary = atob(padded)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return bytes
+}
+
+function hmacKey(secret, usages) {
+  return crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    usages,
+  )
+}
+
+export async function signApprovalToken({
+  webhookSecret,
+  owner,
+  repo,
+  issueNumber,
+  now = Date.now(),
+  ttlSeconds = APPROVAL_TOKEN_TTL_SECONDS,
+}) {
+  const payload = { o: owner, r: repo, n: issueNumber, exp: Math.floor(now / 1000) + ttlSeconds }
+  const payloadB64 = base64UrlEncode(new TextEncoder().encode(JSON.stringify(payload)))
+  const key = await hmacKey(webhookSecret, ['sign'])
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payloadB64))
+  return `${payloadB64}.${base64UrlEncode(new Uint8Array(sig))}`
+}
+
+// Returns the verified payload, or null on anything wrong: malformed token,
+// bad signature, or expiry. Never throws, so a caller can treat null as a
+// flat 401 without a try/catch of its own.
+export async function verifyApprovalToken({ token, webhookSecret, now = Date.now() }) {
+  if (typeof token !== 'string' || !token) return null
+  const parts = token.split('.')
+  if (parts.length !== 2) return null
+  const [payloadB64, sigB64] = parts
+
+  let payload
+  try {
+    payload = JSON.parse(new TextDecoder().decode(base64UrlDecode(payloadB64)))
+  } catch {
+    return null
+  }
+  if (
+    typeof payload !== 'object' || payload === null ||
+    typeof payload.o !== 'string' || !payload.o ||
+    typeof payload.r !== 'string' || !payload.r ||
+    !Number.isInteger(payload.n) || payload.n <= 0 ||
+    !Number.isInteger(payload.exp)
+  ) {
+    return null
+  }
+
+  let sigBytes
+  try {
+    sigBytes = base64UrlDecode(sigB64)
+  } catch {
+    return null
+  }
+
+  const key = await hmacKey(webhookSecret, ['verify'])
+  const valid = await crypto.subtle.verify('HMAC', key, sigBytes, new TextEncoder().encode(payloadB64))
+  if (!valid) return null
+  if (Math.floor(now / 1000) >= payload.exp) return null
+
+  return { owner: payload.o, repo: payload.r, issueNumber: payload.n, exp: payload.exp }
+}
+
 export function ntfyServerAndTopic(topicUrl) {
   let resolved = topicUrl
   if (!resolved.includes('://')) {

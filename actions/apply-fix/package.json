@@ -10,7 +10,7 @@
   "dependencies": {
     "@actions/core": "^3.0.1",
     "@actions/github": "^9.1.1",
-    "@anthropic-ai/sdk": "^0.117.1"
+    "@anthropic-ai/sdk": "^0.128.0"
   },
   "devDependencies": {
     "@vercel/ncc": "^0.45.0",
